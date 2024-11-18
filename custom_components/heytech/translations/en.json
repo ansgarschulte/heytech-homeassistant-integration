@@ -2,27 +2,94 @@
   "config": {
     "step": {
       "user": {
-        "description": "If you need help with the configuration have a look here: https://github.com/ansgarschulte/heytech-homeassistant-integration",
+        "title": "Configure Heytech Integration",
+        "description": "Set up your Heytech connection. If you need help with the configuration have a look here: https://github.com/ansgarschulte/heytech-homeassistant-integration",
         "data": {
           "host": "Host/IP",
           "port": "Port",
-          "pin": "Pin"
+          "pin": "Pin (optional)"
         }
       },
       "shutter": {
+        "title": "Add Shutter",
+        "description": "Add your shutters by specifying a name and channels.",
         "data": {
           "name": "Shutter Name",
           "channels": "Channels (comma-separated)",
           "add_another": "Add another shutter"
-        },
-        "title": "Configure Shutters",
-        "description": "Add your shutters by specifying a name and channels."
+        }
+      },
+      "shutter_menu": {
+        "title": "Manage Shutters",
+        "description": "Select an option:",
+        "menu_options": {
+          "add_shutter": "Add Shutter",
+          "remove_shutter": "Remove Shutter",
+          "finish": "Finish"
+        }
+      },
+      "add_shutter": {
+        "title": "Add Shutter",
+        "description": "Enter the name and channels for the new shutter.",
+        "data": {
+          "name": "Shutter Name",
+          "channels": "Channels (comma-separated)",
+          "add_another": "Add another shutter"
+        }
+      },
+      "remove_shutter": {
+        "title": "Remove Shutter",
+        "description": "Select a shutter to remove.",
+        "data": {
+          "shutter": "Select Shutter to Remove"
+        }
+      },
+      "finish": {
+        "title": "Finish",
+        "description": "You have successfully added your shutters.",
+        "data": {
+          "shutter": "Finish"
+        }
+      }
+    },
+    "selector": {
+      "host": {
+        "name": "Host/IP",
+        "description": "Enter the host or IP address of your Heytech device."
+      },
+      "port": {
+        "name": "Port",
+        "description": "Enter the port number."
+      },
+      "pin": {
+        "name": "Pin (optional)",
+        "description": "Enter the PIN if applicable."
+      },
+      "name": {
+        "name": "Shutter Name",
+        "description": "Enter a name for the shutter."
+      },
+      "channels": {
+        "name": "Channels (comma-separated)",
+        "description": "Enter the channels for the shutter, separated by commas."
+      },
+      "add_another": {
+        "name": "Add another shutter",
+        "description": "Check to add another shutter after this one."
+      },
+      "shutter": {
+        "name": "Select Shutter to Remove",
+        "description": "Choose a shutter to remove."
       }
     },
     "error": {
       "connection": "Unable to connect to the server.",
       "unknown": "Unknown error occurred.",
+      "no_shutters_to_remove": "There are no shutters to remove.",
       "invalid_channels": "Invalid channels input. Please enter numbers separated by commas."
+    },
+    "abort": {
+      "no_shutters_to_remove": "There are no shutters to remove."
     }
   }
 }

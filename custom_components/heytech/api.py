@@ -30,7 +30,7 @@ class HeytechApiClient:
         self._processing = False
 
     def _generate_shutter_command(self, action: str, channels: list):
-        command_map = {"open": "up", "close": "down", "stop": "off"}
+        command_map = {"open": "up", "close": "down", "stop": "off", "sss": "sss"}
         if action not in command_map:
             _LOGGER.error(f"Unknown action: {action}")
             return
