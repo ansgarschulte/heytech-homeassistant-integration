@@ -1,0 +1,28 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "If you need help with the configuration have a look here: https://github.com/ansgarschulte/heytech-homeassistant-integration",
+        "data": {
+          "host": "Host/IP",
+          "port": "Port",
+          "pin": "Pin"
+        }
+      },
+      "shutter": {
+        "data": {
+          "name": "Shutter Name",
+          "channels": "Channels (comma-separated)",
+          "add_another": "Add another shutter"
+        },
+        "title": "Configure Shutters",
+        "description": "Add your shutters by specifying a name and channels."
+      }
+    },
+    "error": {
+      "connection": "Unable to connect to the server.",
+      "unknown": "Unknown error occurred.",
+      "invalid_channels": "Invalid channels input. Please enter numbers separated by commas."
+    }
+  }
+}
