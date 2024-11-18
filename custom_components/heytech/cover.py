@@ -2,6 +2,8 @@ import logging
 
 from homeassistant.components.cover import CoverEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import HeytechApiClient
@@ -23,12 +25,63 @@ async def async_setup_entry(
 
     shutters = data.get(CONF_SHUTTERS, {})
     covers = []
+
+    # Create a set of unique_ids for shutters in the current configuration
+    current_unique_ids = set()
     for name, channels in shutters.items():
         unique_id = f"{entry.entry_id}_{name}"
+        current_unique_ids.add(unique_id)
         channel_list = [int(channel.strip()) for channel in channels.split(",")]
         covers.append(HeytechCover(name, channel_list, api_client, unique_id))
 
+    # Add new entities
     async_add_entities(covers)
+
+    # Remove entities and devices that are no longer in the configuration
+    await _async_cleanup_entities_and_devices(hass, entry, current_unique_ids)
+
+
+async def _async_cleanup_entities_and_devices(
+        hass: HomeAssistant,
+        entry: IntegrationHeytechConfigEntry,
+        current_unique_ids: set,
+):
+    """Remove entities and devices that are no longer in the configuration."""
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+    entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+
+    # Map devices to their associated entities
+    device_entities = {}
+
+    for entity_entry in entries:
+        if entity_entry.domain != "cover":
+            continue
+
+        device_id = entity_entry.device_id
+        if device_id:
+            device_entities.setdefault(device_id, []).append(entity_entry)
+
+        if entity_entry.unique_id not in current_unique_ids:
+            _LOGGER.info(
+                f"Removing entity {entity_entry.entity_id} ({entity_entry.unique_id})"
+            )
+            entity_registry.async_remove(entity_entry.entity_id)
+
+    # Remove devices that have no entities left
+    for device_id, entities in device_entities.items():
+        # Check if any entities associated with the device still exist
+        remaining_entities = [
+            e for e in entities if entity_registry.async_get(e.entity_id) is not None
+        ]
+        if not remaining_entities:
+            # No entities left for this device; remove the device
+            device_entry = device_registry.async_get(device_id)
+            if device_entry:
+                _LOGGER.info(
+                    f"Removing device {device_entry.name} ({device_entry.id})"
+                )
+                device_registry.async_remove_device(device_id)
 
 
 class HeytechCover(CoverEntity):
