@@ -2,7 +2,7 @@
 Custom integration to integrate heytech with Home Assistant.
 
 For more details about this integration, please refer to
-https://github.com/ludeeus/heytech
+https://github.com/ansgarschulte/heytech-homeassistant-integration
 """
 
 from __future__ import annotations
