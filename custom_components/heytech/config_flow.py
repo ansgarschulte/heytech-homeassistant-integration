@@ -8,7 +8,10 @@ from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME
 from homeassistant.helpers import selector
 
 from . import HeytechApiClient
-from .api import IntegrationHeytechApiClientCommunicationError, IntegrationHeytechApiClientError
+from .api import (
+    IntegrationHeytechApiClientCommunicationError,
+    IntegrationHeytechApiClientError,
+)
 from .const import DOMAIN, LOGGER, CONF_PIN, CONF_SHUTTERS
 
 
@@ -24,6 +27,10 @@ class HeytechFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self._shutters = {}
         self._shutter_name = None
         self._shutter_channels = None
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        return HeytechOptionsFlowHandler(config_entry)
 
     async def async_step_user(
             self,
@@ -161,3 +168,132 @@ class HeytechFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Validate credentials."""
         client = HeytechApiClient(host=host, port=int(port), pin=pin)
         await client.async_test_connection()
+
+
+class HeytechOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle Heytech options."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry):
+        """Initialize Heytech options flow."""
+        self.config_entry = config_entry
+        self._shutters = dict(
+            self.config_entry.options.get(
+                CONF_SHUTTERS, self.config_entry.data.get(CONF_SHUTTERS, {})
+            )
+        )
+        self._shutter_name = None
+        self._shutter_channels = None
+
+    async def async_step_init(self, user_input=None):
+        """Manage the options."""
+        return await self.async_step_shutter_menu()
+
+    async def async_step_shutter_menu(self, user_input=None):
+        """Menu for managing shutters."""
+        if user_input is not None:
+            if user_input["menu_option"] == "add_shutter":
+                return await self.async_step_add_shutter()
+            elif user_input["menu_option"] == "remove_shutter":
+                return await self.async_step_remove_shutter()
+            elif user_input["menu_option"] == "finish":
+                # Check if shutters have changed
+                if self._shutters != self.config_entry.options.get(
+                        CONF_SHUTTERS, self.config_entry.data.get(CONF_SHUTTERS, {})
+                ):
+                    return self.async_create_entry(
+                        title="", data={CONF_SHUTTERS: self._shutters}
+                    )
+                else:
+                    return self.async_abort(reason="no_changes")
+        options = [
+            ("add_shutter", "Add Shutter"),
+            ("remove_shutter", "Remove Shutter"),
+            ("finish", "Finish"),
+        ]
+        data_schema = vol.Schema(
+            {
+                vol.Required("menu_option"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": val, "label": label} for val, label in options
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="shutter_menu",
+            data_schema=data_schema,
+        )
+
+    async def async_step_add_shutter(self, user_input=None):
+        """Add a shutter."""
+        errors = {}
+        if user_input is not None:
+            self._shutter_name = user_input[CONF_NAME]
+            self._shutter_channels = user_input["channels"]
+            # Validate channels input
+            try:
+                channels = [
+                    int(ch.strip()) for ch in self._shutter_channels.split(",")
+                ]
+            except ValueError:
+                errors["channels"] = "invalid_channels"
+                return await self._show_add_shutter_form(user_input, errors)
+            # Add shutter to shutters dict
+            self._shutters[self._shutter_name] = self._shutter_channels
+            # Ask if the user wants to add another shutter
+            if user_input.get("add_another"):
+                return await self.async_step_add_shutter()
+            else:
+                return await self.async_step_shutter_menu()
+        return await self._show_add_shutter_form(user_input, errors)
+
+    async def _show_add_shutter_form(self, user_input, errors):
+        return self.async_show_form(
+            step_id="add_shutter",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_NAME, default=(user_input or {}).get(CONF_NAME, "")
+                    ): str,
+                    vol.Required(
+                        "channels", default=(user_input or {}).get("channels", "")
+                    ): str,
+                    vol.Optional("add_another", default=True): bool,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_remove_shutter(self, user_input=None):
+        """Remove a shutter."""
+        errors = {}
+        if not self._shutters:
+            return self.async_abort(reason="no_shutters_to_remove")
+        if user_input is not None:
+            shutter_to_remove = user_input["shutter"]
+            if shutter_to_remove in self._shutters:
+                del self._shutters[shutter_to_remove]
+                return await self.async_step_shutter_menu()
+            else:
+                errors["shutter"] = "shutter_not_found"
+        data_schema = vol.Schema(
+            {
+                vol.Required("shutter"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": name, "label": name}
+                            for name in self._shutters.keys()
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="remove_shutter",
+            data_schema=data_schema,
+            errors=errors,
+        )

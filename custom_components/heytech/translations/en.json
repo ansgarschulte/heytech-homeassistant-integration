@@ -46,7 +46,7 @@
       },
       "finish": {
         "title": "Finish",
-        "description": "You have successfully added your shutters.",
+        "description": "You have successfully managed your shutters.",
         "data": {
           "shutter": "Finish"
         }
@@ -86,10 +86,12 @@
       "connection": "Unable to connect to the server.",
       "unknown": "Unknown error occurred.",
       "no_shutters_to_remove": "There are no shutters to remove.",
-      "invalid_channels": "Invalid channels input. Please enter numbers separated by commas."
+      "invalid_channels": "Invalid channels input. Please enter numbers separated by commas.",
+      "shutter_not_found": "Selected shutter not found."
     },
     "abort": {
-      "no_shutters_to_remove": "There are no shutters to remove."
+      "no_shutters_to_remove": "There are no shutters to remove.",
+      "no_changes": "No changes detected. Exiting without saving."
     }
   }
 }

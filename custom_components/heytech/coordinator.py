@@ -7,9 +7,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import (
-    HeytechApiClient,
-)
+from .api import HeytechApiClient
 from .const import DOMAIN, LOGGER
 
 if TYPE_CHECKING:
