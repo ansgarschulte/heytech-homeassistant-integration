@@ -25,9 +25,9 @@ MIN_POSITION = 0
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: IntegrationHeytechConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: IntegrationHeytechConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Heytech covers based on a config entry."""
     _LOGGER.info("Setting up Heytech covers for entry %s", entry.entry_id)
@@ -53,9 +53,9 @@ async def async_setup_entry(
 
 
 async def _async_cleanup_entities_and_devices(
-        hass: HomeAssistant,
-        entry: IntegrationHeytechConfigEntry,
-        current_unique_ids: set[str],
+    hass: HomeAssistant,
+    entry: IntegrationHeytechConfigEntry,
+    current_unique_ids: set[str],
 ) -> None:
     """Remove entities and devices that are no longer in the configuration."""
     entity_registry = er.async_get(hass)
@@ -101,11 +101,11 @@ class HeytechCover(CoverEntity):
     """Representation of a Heytech cover."""
 
     def __init__(
-            self,
-            name: str,
-            channels: list[int],
-            api_client: HeytechApiClient,
-            unique_id: str,
+        self,
+        name: str,
+        channels: list[int],
+        api_client: HeytechApiClient,
+        unique_id: str,
     ) -> None:
         """Initialize the cover."""
         self._api_client = api_client
@@ -174,4 +174,3 @@ class HeytechCover(CoverEntity):
     async def _send_command(self, action: str | int) -> None:
         """Send a command to the cover."""
         await self._api_client.add_shutter_command(action, channels=self._channels)
-

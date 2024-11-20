@@ -18,9 +18,7 @@ class IntegrationHeytechApiClientError(Exception):
     """Exception to indicate a general API error."""
 
 
-class IntegrationHeytechApiClientCommunicationError(
-    IntegrationHeytechApiClientError
-):
+class IntegrationHeytechApiClientCommunicationError(IntegrationHeytechApiClientError):
     """Exception to indicate a communication error."""
 
     def __str__(self) -> str:
@@ -42,9 +40,7 @@ class HeytechApiClient:
         self._lock = asyncio.Lock()
         self._processing = False
 
-    def _generate_shutter_command(
-            self, action: str, channels: list[int]
-    ) -> list[str]:
+    def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
         command_map = {"open": "up", "close": "down", "stop": "off", "sss": "sss"}
         if action not in command_map:

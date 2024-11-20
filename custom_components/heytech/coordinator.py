@@ -27,9 +27,9 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
     config_entry: IntegrationHeytechConfigEntry
 
     def __init__(
-            self,
-            hass: HomeAssistant,
-            api_client: HeytechApiClient,
+        self,
+        hass: HomeAssistant,
+        api_client: HeytechApiClient,
     ) -> None:
         """Initialize the data update coordinator."""
         super().__init__(
