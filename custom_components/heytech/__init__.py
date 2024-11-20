@@ -1,7 +1,7 @@
 """
-Custom integration to integrate heytech with Home Assistant.
+Custom integration to integrate Heytech with Home Assistant.
 
-For more details about this integration, please refer to
+For more details about this integration, please refer to:
 https://github.com/ansgarschulte/heytech-homeassistant-integration
 """
 
@@ -10,29 +10,25 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform, CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.loader import async_get_loaded_integration
 
 from .api import HeytechApiClient
-from .const import DOMAIN, CONF_PIN
+from .const import CONF_PIN, DOMAIN
 from .coordinator import HeytechDataUpdateCoordinator
 from .data import IntegrationHeytechData
 
 if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .data import IntegrationHeytechConfigEntry
-
-PLATFORMS: list[Platform] = [
-    Platform.COVER,
-]
+PLATFORMS: list[Platform] = [Platform.COVER]
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
         hass: HomeAssistant,
-        entry: IntegrationHeytechConfigEntry,
+        entry: ConfigEntry,
 ) -> bool:
     """Set up Heytech from a config entry."""
     try:
@@ -53,14 +49,16 @@ async def async_setup_entry(
             api_client=api_client,
         )
         hass.data[DOMAIN][entry.entry_id]["coordinator"] = heytech_coordinator
-        entry.runtime_data = IntegrationHeytechData(
+
+        integration = async_get_loaded_integration(hass, entry.domain)
+        runtime_data = IntegrationHeytechData(
             client=api_client,
-            integration=async_get_loaded_integration(hass, entry.domain),  # Removed await here
+            integration=integration,
             coordinator=heytech_coordinator,
         )
 
         # Store runtime data in hass.data
-        hass.data[DOMAIN][entry.entry_id]["runtime_data"] = entry.runtime_data
+        hass.data[DOMAIN][entry.entry_id]["runtime_data"] = runtime_data
 
         # First data refresh
         await heytech_coordinator.async_config_entry_first_refresh()
@@ -70,15 +68,16 @@ async def async_setup_entry(
         # Add the update listener back
         entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
-        return True
-    except Exception as e:
-        _LOGGER.error(f"Error setting up entry: {e}")
+    except Exception:
+        _LOGGER.exception("Error setting up entry")
         return False
+    else:
+        return True
 
 
 async def async_reload_entry(
         hass: HomeAssistant,
-        entry: IntegrationHeytechConfigEntry,
+        entry: ConfigEntry,
 ) -> None:
     """Reload config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
@@ -86,7 +85,7 @@ async def async_reload_entry(
 
 async def async_unload_entry(
         hass: HomeAssistant,
-        entry: IntegrationHeytechConfigEntry,
+        entry: ConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

@@ -1,4 +1,12 @@
+"""
+Heytech Cover Integration for Home Assistant.
+
+This module provides support for Heytech covers within Home Assistant,
+allowing users to control their Heytech shutters via the Home Assistant interface.
+"""
+
 import logging
+from typing import Any
 
 from homeassistant.components.cover import CoverEntity
 from homeassistant.core import HomeAssistant
@@ -12,6 +20,9 @@ from .data import IntegrationHeytechConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
+MAX_POSITION = 100
+MIN_POSITION = 0
+
 
 async def async_setup_entry(
         hass: HomeAssistant,
@@ -19,7 +30,7 @@ async def async_setup_entry(
         async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Heytech covers based on a config entry."""
-    _LOGGER.info(f"Setting up Heytech covers for entry {entry.entry_id}")
+    _LOGGER.info("Setting up Heytech covers for entry %s", entry.entry_id)
     data = {**entry.data, **entry.options}
     api_client = hass.data[DOMAIN][entry.entry_id]["api_client"]
 
@@ -27,7 +38,7 @@ async def async_setup_entry(
     covers = []
 
     # Create a set of unique_ids for shutters in the current configuration
-    current_unique_ids = set()
+    current_unique_ids: set[str] = set()
     for name, channels in shutters.items():
         unique_id = f"{entry.entry_id}_{name}"
         current_unique_ids.add(unique_id)
@@ -44,15 +55,15 @@ async def async_setup_entry(
 async def _async_cleanup_entities_and_devices(
         hass: HomeAssistant,
         entry: IntegrationHeytechConfigEntry,
-        current_unique_ids: set,
-):
+        current_unique_ids: set[str],
+) -> None:
     """Remove entities and devices that are no longer in the configuration."""
     entity_registry = er.async_get(hass)
     device_registry = dr.async_get(hass)
     entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
 
     # Map devices to their associated entities
-    device_entities = {}
+    device_entities: dict[str, list[er.RegistryEntry]] = {}
 
     for entity_entry in entries:
         if entity_entry.domain != "cover":
@@ -64,7 +75,9 @@ async def _async_cleanup_entities_and_devices(
 
         if entity_entry.unique_id not in current_unique_ids:
             _LOGGER.info(
-                f"Removing entity {entity_entry.entity_id} ({entity_entry.unique_id})"
+                "Removing entity %s (%s)",
+                entity_entry.entity_id,
+                entity_entry.unique_id,
             )
             entity_registry.async_remove(entity_entry.entity_id)
 
@@ -79,7 +92,7 @@ async def _async_cleanup_entities_and_devices(
             device_entry = device_registry.async_get(device_id)
             if device_entry:
                 _LOGGER.info(
-                    f"Removing device {device_entry.name} ({device_entry.id})"
+                    "Removing device %s (%s)", device_entry.name, device_entry.id
                 )
                 device_registry.async_remove_device(device_id)
 
@@ -88,8 +101,12 @@ class HeytechCover(CoverEntity):
     """Representation of a Heytech cover."""
 
     def __init__(
-            self, name: str, channels: list, api_client: HeytechApiClient, unique_id: str
-    ):
+            self,
+            name: str,
+            channels: list[int],
+            api_client: HeytechApiClient,
+            unique_id: str,
+    ) -> None:
         """Initialize the cover."""
         self._api_client = api_client
         self._unique_id = unique_id
@@ -98,7 +115,7 @@ class HeytechCover(CoverEntity):
         self._is_closed = True  # Assuming shutters start closed by default
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return a unique ID for this cover."""
         return self._unique_id
 
@@ -108,7 +125,7 @@ class HeytechCover(CoverEntity):
         return self._name
 
     @property
-    def device_info(self):
+    def device_info(self) -> dict[str, Any]:
         """Return device information about this cover."""
         return {
             "identifiers": {(DOMAIN, self._unique_id)},
@@ -122,37 +139,39 @@ class HeytechCover(CoverEntity):
         """Return if the cover is closed."""
         return self._is_closed
 
-    async def async_open_cover(self, **kwargs):
+    async def async_open_cover(self, **_kwargs: Any) -> None:
         """Open the cover."""
-        _LOGGER.info(f"Opening {self._name} on channels {self._channels}")
+        _LOGGER.info("Opening %s on channels %s", self._name, self._channels)
         await self._send_command("open")
         self._is_closed = False
         self.async_write_ha_state()
 
-    async def async_close_cover(self, **kwargs):
+    async def async_close_cover(self, **_kwargs: Any) -> None:
         """Close the cover."""
-        _LOGGER.info(f"Closing {self._name} on channels {self._channels}")
+        _LOGGER.info("Closing %s on channels %s", self._name, self._channels)
         await self._send_command("close")
         self._is_closed = True
         self.async_write_ha_state()
 
-    async def async_stop_cover(self, **kwargs):
+    async def async_stop_cover(self, **_kwargs: Any) -> None:
         """Stop the cover."""
-        _LOGGER.info(f"Stopping {self._name} on channels {self._channels}")
+        _LOGGER.info("Stopping %s on channels %s", self._name, self._channels)
         await self._send_command("stop")
         self.async_write_ha_state()
 
-    async def async_set_cover_position(self, **kwargs) -> None:
+    async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover to a specific position."""
-        _LOGGER.info(f"Setting position of {self._name} to {kwargs['position']}%")
-        if kwargs["position"] == 100:
-            command = "open"
-        elif kwargs["position"] == 0:
+        position: int = kwargs["position"]
+        _LOGGER.info("Setting position of %s to %s%%", self._name, position)
+        if position == MAX_POSITION:
+            command: str | int = "open"
+        elif position == MIN_POSITION:
             command = "close"
         else:
-            command = kwargs["position"]
+            command = position
         await self._send_command(command)
 
-    async def _send_command(self, action):
+    async def _send_command(self, action: str | int) -> None:
         """Send a command to the cover."""
         await self._api_client.add_shutter_command(action, channels=self._channels)
+
