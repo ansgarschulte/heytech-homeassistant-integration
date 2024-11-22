@@ -44,8 +44,13 @@ class HeytechApiClient:
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
-
-        command_map = {"open": "up", "close": "down", "stop": "off", "sss": "sss", "smn": "smn"}
+        command_map = {
+            "open": "up",
+            "close": "down",
+            "stop": "off",
+            "sss": "sss",
+            "smn": "smn",
+        }
 
         if action.isdigit():
             shutter_command = action
@@ -135,8 +140,12 @@ class HeytechApiClient:
                     _LOGGER.info("Finished parsing shutters: %s", shutters)
                     self.shutters = shutters
                     break
-        except Exception as e:
-            _LOGGER.error("Error while parsing smn output: %s", e)
+        except (
+            asyncio.IncompleteReadError,
+            asyncio.LimitOverrunError,
+            asyncio.StreamReaderProtocolError,
+        ):
+            _LOGGER.exception("Error while parsing smn output")
 
     async def async_test_connection(self) -> None:
         """Test connection to the API."""
