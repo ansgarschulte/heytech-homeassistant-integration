@@ -9,29 +9,79 @@
 
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
+# Heytech Home Assistant Integration
 
-_Integration to integrate with [Heytech](https://rolladensteuerung.de/)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 
-**This integration will set up the following platforms.**
+This is a custom integration for [Home Assistant](https://www.home-assistant.io/) that allows you to control your Heytech shutters.
 
-Platform | Description
--- | --
-`cover` | Controll you heytech shutters.
+---
+
+## Features
+- Control Heytech shutters directly from Home Assistant.
+- Add and manage shutters dynamically through the Home Assistant interface.
+- Seamless integration with Home Assistant's `Cover` platform.
+
+---
 
 ## Installation
 
-1. Using the tool of choice open the directory (folder) for your HA configuration (where you find `configuration.yaml`).
-1. If you do not have a `custom_components` directory (folder) there, you need to create it.
-1. In the `custom_components` directory (folder) create a new folder called `heytech`.
-1. Download _all_ the files from the `custom_components/heytech/` directory (folder) in this repository.
-1. Place the files you downloaded in the new directory (folder) you created.
-1. Restart Home Assistant
-1. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Heytech"
+### Step 1: Add the Repository
+1. Ensure that [HACS](https://hacs.xyz/) is installed in your Home Assistant setup.
+2. Go to **HACS** → **Integrations**.
+3. Click the three dots in the top-right corner and select **Custom repositories**.
+4. Add this repository URL:
+5. Choose **Integration** as the category and click **Add**.
 
-## Configuration is done in the UI
+### Step 2: Install the Integration
+1. After adding the custom repository, search for "Heytech Home Assistant Integration" in HACS.
+2. Click **Install** to add the integration to your setup.
 
-<!---->
+### Step 3: Restart Home Assistant
+1. Restart Home Assistant to apply the changes.
+- Navigate to **Settings** → **System** → **Restart**.
 
+---
+
+## Configuration
+
+### Add the Integration
+1. After restarting, go to **Settings** → **Devices & Services** → **Add Integration**.
+2. Search for **Heytech** and select it.
+3. Enter the following details:
+- **Host/IP**: The IP address or hostname of your Heytech hub.
+- **Port**: The port number (default: `1002`).
+- **Pin (optional)**: Your Heytech device PIN, if applicable.
+
+### Add and Manage Shutters
+- Once the integration is set up, you can add shutters via the integration settings:
+1. Navigate to **Settings** → **Devices & Services** → **Heytech Integration**.
+2. Select **Options** to add or manage shutters:
+- **Add Shutter**: Provide a name and channel numbers (comma-separated) for each shutter.
+- **Remove Shutter**: Remove shutters no longer in use.
+
+---
+
+## Example Configuration in Home Assistant
+
+No manual YAML configuration is required, but the integration adds entities automatically, such as:
+- `cover.living_room_shutter`
+- `cover.bedroom_shutter`
+
+You can control these shutters via Home Assistant UI, automations, or scripts.
+
+---
+
+## Troubleshooting
+If you encounter any issues:
+1. Check the **Logs** in Home Assistant for error messages.
+2. Ensure your Heytech hub is reachable from the network.
+3. Open an issue on the [GitHub repository](https://github.com/ansgarschulte/heytech-homeassistant-integration/issues).
+
+---
+
+## Support and Feedback
+If you find any bugs or have feature requests, please open an issue in the [GitHub Issues section](https://github.com/ansgarschulte/heytech-homeassistant-integration/issues).
 ## Contributions are welcome!
 
 If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)
