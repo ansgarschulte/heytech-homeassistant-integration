@@ -19,7 +19,7 @@ from .api import (
     IntegrationHeytechApiClientCommunicationError,
     IntegrationHeytechApiClientError,
 )
-from .const import CONF_PIN, CONF_SHUTTERS, DOMAIN, LOGGER
+from .const import CONF_PIN, CONF_SHUTTERS, DOMAIN, LOGGER, CONF_MAX_AUTO_SHUTTERS
 
 if TYPE_CHECKING:
     from homeassistant import data_entry_flow
@@ -35,6 +35,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
         self._host: str | None = None
         self._port: int | None = None
         self._pin: str | None = None
+        self._max_auto_shutters: int | None = None
         self._shutters: dict[str, str] = {}
         self._shutter_name: str | None = None
         self._shutter_channels: str | None = None
@@ -45,8 +46,8 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
         return HeytechOptionsFlowHandler(config_entry)
 
     async def async_step_user(
-        self,
-        user_input: dict[str, Any] | None = None,
+            self,
+            user_input: dict[str, Any] | None = None,
     ) -> data_entry_flow.FlowResult:
         """Handle a flow initialized by the user."""
         _errors: dict[str, str] = {}
@@ -54,6 +55,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
             self._host = user_input[CONF_HOST]
             self._port = user_input[CONF_PORT]
             self._pin = user_input.get(CONF_PIN, "")
+            self._max_auto_shutters = user_input.get(CONF_MAX_AUTO_SHUTTERS, 10)
 
             # Validate connection
             try:
@@ -102,14 +104,24 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                             type=selector.TextSelectorType.PASSWORD,
                         ),
                     ),
+                    vol.Optional(
+                        CONF_MAX_AUTO_SHUTTERS,
+                        default=(user_input or {}).get(CONF_MAX_AUTO_SHUTTERS, 10),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1,
+                            max=50,
+                            mode=selector.NumberSelectorMode.BOX,
+                        ),
+                    ),
                 },
             ),
             errors=_errors,
         )
 
     async def async_step_shutter(
-        self,
-        user_input: dict[str, Any] | None = None,
+            self,
+            user_input: dict[str, Any] | None = None,
     ) -> data_entry_flow.FlowResult:
         """Step to add shutters."""
         _errors: dict[str, str] = {}
@@ -138,13 +150,14 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                     CONF_PORT: self._port,
                     CONF_PIN: self._pin,
                     CONF_SHUTTERS: self._shutters,
+                    CONF_MAX_AUTO_SHUTTERS: self._max_auto_shutters,
                 },
             )
 
         return await self._show_shutter_form(user_input, _errors)
 
     async def _show_shutter_form(
-        self, user_input: dict[str, Any] | None, errors: dict[str, str]
+            self, user_input: dict[str, Any] | None, errors: dict[str, str]
     ) -> data_entry_flow.FlowResult:
         """Show the form to input a shutter."""
         return self.async_show_form(
@@ -182,7 +195,6 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
         client = HeytechApiClient(host=host, port=int(port), pin=pin)
         await client.async_test_connection()
 
-
 class HeytechOptionsFlowHandler(OptionsFlow):
     """Handle Heytech options."""
 
@@ -199,13 +211,13 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         self._shutter_channels: str | None = None
 
     async def async_step_init(
-        self, _user_input: dict[str, Any] | None = None
+            self, _user_input: dict[str, Any] | None = None
     ) -> data_entry_flow.FlowResult:
         """Manage the options."""
         return await self.async_step_shutter_menu()
 
     async def async_step_shutter_menu(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> data_entry_flow.FlowResult:
         """Menu for managing shutters."""
         if user_input is not None:
@@ -249,7 +261,7 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         )
 
     async def async_step_add_shutter(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> data_entry_flow.FlowResult:
         """Add a shutter."""
         errors: dict[str, str] = {}
@@ -271,7 +283,7 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         return await self._show_add_shutter_form(user_input, errors)
 
     async def _show_add_shutter_form(
-        self, user_input: dict[str, Any] | None, errors: dict[str, str]
+            self, user_input: dict[str, Any] | None, errors: dict[str, str]
     ) -> data_entry_flow.FlowResult:
         """Show the form to add a shutter."""
         return self.async_show_form(
@@ -305,7 +317,7 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         )
 
     async def async_step_remove_shutter(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> data_entry_flow.FlowResult:
         """Remove a shutter."""
         errors: dict[str, str] = {}

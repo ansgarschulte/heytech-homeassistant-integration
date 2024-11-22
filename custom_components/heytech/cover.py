@@ -15,7 +15,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import HeytechApiClient
-from .const import CONF_SHUTTERS, DOMAIN
+from .const import CONF_SHUTTERS, DOMAIN, CONF_MAX_AUTO_SHUTTERS, DEFAULT_MAX_AUTO_SHUTTERS
 from .data import IntegrationHeytechConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,26 +23,51 @@ _LOGGER = logging.getLogger(__name__)
 MAX_POSITION = 100
 MIN_POSITION = 0
 
-
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: IntegrationHeytechConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+        hass: HomeAssistant,
+        entry: IntegrationHeytechConfigEntry,
+        async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Heytech covers based on a config entry."""
     _LOGGER.info("Setting up Heytech covers for entry %s", entry.entry_id)
-    data = {**entry.data, **entry.options}
-    api_client = hass.data[DOMAIN][entry.entry_id]["api_client"]
+    api_client: HeytechApiClient = hass.data[DOMAIN][entry.entry_id]["api_client"]
 
-    shutters = data.get(CONF_SHUTTERS, {})
+    # Fetch dynamic shutters from the API
+    await api_client.async_get_data()
+    dynamic_shutters = api_client.shutters  # Get parsed shutters from the API
+
+    # Limit the number of dynamic shutters
+    max_auto_shutters = int(entry.data.get(CONF_MAX_AUTO_SHUTTERS, DEFAULT_MAX_AUTO_SHUTTERS))
+    limited_dynamic_shutters = dict(list(dynamic_shutters.items())[:max_auto_shutters])
+
+    # Normalize dynamic shutters to comma-separated channels
+    normalized_dynamic_shutters = {
+        name: str(details["channel"]) for name, details in limited_dynamic_shutters.items()
+    }
+
+    # Get updated custom-configured shutters from the config entry
+    configured_shutters = entry.options.get(CONF_SHUTTERS, entry.data.get(CONF_SHUTTERS, {}))
+
+    # Merge configured shutters with normalized and limited dynamic shutters
+    all_shutters = {**configured_shutters, **normalized_dynamic_shutters}
+
     covers = []
-
-    # Create a set of unique_ids for shutters in the current configuration
     current_unique_ids: set[str] = set()
-    for name, channels in shutters.items():
+
+    for name, channels in all_shutters.items():
+        try:
+            # Ensure channels are parsed into a list of integers
+            if isinstance(channels, str):
+                channel_list = [int(ch.strip()) for ch in channels.split(",")]
+            else:
+                raise ValueError(f"Invalid channel format for '{name}': {channels}")
+        except ValueError as exc:
+            _LOGGER.warning("Skipping invalid channel configuration for '%s': %s", name, exc)
+            continue
+
         unique_id = f"{entry.entry_id}_{name}"
         current_unique_ids.add(unique_id)
-        channel_list = [int(channel.strip()) for channel in channels.split(",")]
+        _LOGGER.info("Adding cover '%s' with channels %s", name, channel_list)
         covers.append(HeytechCover(name, channel_list, api_client, unique_id))
 
     # Add new entities
@@ -53,9 +78,9 @@ async def async_setup_entry(
 
 
 async def _async_cleanup_entities_and_devices(
-    hass: HomeAssistant,
-    entry: IntegrationHeytechConfigEntry,
-    current_unique_ids: set[str],
+        hass: HomeAssistant,
+        entry: IntegrationHeytechConfigEntry,
+        current_unique_ids: set[str],
 ) -> None:
     """Remove entities and devices that are no longer in the configuration."""
     entity_registry = er.async_get(hass)
@@ -101,11 +126,11 @@ class HeytechCover(CoverEntity):
     """Representation of a Heytech cover."""
 
     def __init__(
-        self,
-        name: str,
-        channels: list[int],
-        api_client: HeytechApiClient,
-        unique_id: str,
+            self,
+            name: str,
+            channels: list[int],
+            api_client: HeytechApiClient,
+            unique_id: str,
     ) -> None:
         """Initialize the cover."""
         self._api_client = api_client
