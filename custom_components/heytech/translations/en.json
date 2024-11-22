@@ -12,7 +12,7 @@
         }
       },
       "shutter": {
-        "title": "Add Shutter",
+        "title": "Add Shutter Group",
         "description": "Add your shutters by specifying a name and channels.",
         "data": {
           "name": "Shutter Name",
@@ -30,7 +30,7 @@
         }
       },
       "add_shutter": {
-        "title": "Add Shutter",
+        "title": "Add Shutter Group",
         "description": "Enter the name and channels for the new shutter.",
         "data": {
           "name": "Shutter Name",
@@ -39,8 +39,8 @@
         }
       },
       "remove_shutter": {
-        "title": "Remove Shutter",
-        "description": "Select a shutter to remove.",
+        "title": "Remove Shutter Group",
+        "description": "Select a shutter group to remove.",
         "data": {
           "shutter": "Select Shutter to Remove"
         }

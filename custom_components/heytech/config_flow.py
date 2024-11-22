@@ -14,12 +14,8 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.helpers import selector
 
-from . import HeytechApiClient
-from .api import (
-    IntegrationHeytechApiClientCommunicationError,
-    IntegrationHeytechApiClientError,
-)
 from .const import CONF_PIN, CONF_SHUTTERS, DOMAIN, LOGGER, CONF_MAX_AUTO_SHUTTERS
+from .api import IntegrationHeytechApiClientCommunicationError, IntegrationHeytechApiClientError, HeytechApiClient
 
 if TYPE_CHECKING:
     from homeassistant import data_entry_flow
@@ -36,6 +32,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
         self._port: int | None = None
         self._pin: str | None = None
         self._max_auto_shutters: int | None = None
+        self._add_custom_shutters: bool = False
         self._shutters: dict[str, str] = {}
         self._shutter_name: str | None = None
         self._shutter_channels: str | None = None
@@ -56,14 +53,11 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
             self._port = user_input[CONF_PORT]
             self._pin = user_input.get(CONF_PIN, "")
             self._max_auto_shutters = user_input.get(CONF_MAX_AUTO_SHUTTERS, 10)
+            self._add_custom_shutters = user_input.get("add_custom_shutters", False)
 
             # Validate connection
             try:
-                await self._test_credentials(
-                    host=self._host,
-                    port=self._port,
-                    pin=self._pin,
-                )
+                await self._test_credentials(self._host, self._port, self._pin)
             except IntegrationHeytechApiClientCommunicationError as exception:
                 LOGGER.error("Communication error: %s", exception)
                 _errors["base"] = "connection"
@@ -71,8 +65,21 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                 LOGGER.exception("Unknown error: %s", exception)
                 _errors["base"] = "unknown"
             else:
-                # Proceed to shutters configuration step
-                return await self.async_step_shutter()
+                # Proceed to shutters configuration step if the user opts to add custom shutters
+                if self._add_custom_shutters:
+                    return await self.async_step_shutter()
+
+                # Skip custom shutters and create the entry directly
+                return self.async_create_entry(
+                    title=self._host or "Heytech",
+                    data={
+                        CONF_HOST: self._host,
+                        CONF_PORT: self._port,
+                        CONF_PIN: self._pin,
+                        CONF_MAX_AUTO_SHUTTERS: self._max_auto_shutters,
+                        CONF_SHUTTERS: {},  # No custom shutters
+                    },
+                )
 
         return self.async_show_form(
             step_id="user",
@@ -114,6 +121,8 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                             mode=selector.NumberSelectorMode.BOX,
                         ),
                     ),
+                    vol.Optional("add_custom_shutters", default=False): selector.BooleanSelector(),
+
                 },
             ),
             errors=_errors,
@@ -142,6 +151,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
             # Ask the user if they want to add another shutter
             if user_input.get("add_another"):
                 return await self.async_step_shutter()
+
             # All shutters added, create the entry
             return self.async_create_entry(
                 title=self._host or "Heytech",
@@ -149,8 +159,8 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                     CONF_HOST: self._host,
                     CONF_PORT: self._port,
                     CONF_PIN: self._pin,
-                    CONF_SHUTTERS: self._shutters,
                     CONF_MAX_AUTO_SHUTTERS: self._max_auto_shutters,
+                    CONF_SHUTTERS: self._shutters,
                 },
             )
 
@@ -164,27 +174,9 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
             step_id="shutter",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_NAME,
-                        default=(user_input or {}).get(CONF_NAME, ""),
-                    ): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.TEXT,
-                        ),
-                    ),
-                    vol.Required(
-                        "channels",
-                        default=(user_input or {}).get("channels", ""),
-                    ): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.TEXT,
-                            multiline=False,
-                        ),
-                    ),
-                    vol.Optional(
-                        "add_another",
-                        default=True,
-                    ): selector.BooleanSelector(),
+                    vol.Required(CONF_NAME, default=(user_input or {}).get(CONF_NAME, "")): selector.TextSelector(),
+                    vol.Required("channels", default=(user_input or {}).get("channels", "")): selector.TextSelector(),
+                    vol.Optional("add_another", default=True): selector.BooleanSelector(),
                 }
             ),
             errors=errors,
