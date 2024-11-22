@@ -44,13 +44,18 @@ class HeytechApiClient:
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
-        command_map = {"open": "up", "close": "down", "stop": "off", "sss": "sss", "smn": "smn"}
-        if action not in command_map:
-            _LOGGER.error("Unknown action: %s", action)
-            message = f"Unknown action: {action}"
-            raise ValueError(message)
 
-        shutter_command = command_map[action]
+        command_map = {"open": "up", "close": "down", "stop": "off", "sss": "sss", "smn": "smn"}
+
+        if action.isdigit():
+            shutter_command = action
+        else:
+            if action not in command_map:
+                _LOGGER.error("Unknown action: %s", action)
+                message = f"Unknown action: {action}"
+                raise ValueError(message)
+            shutter_command = command_map[action]
+
         commands: list[str] = []
 
         if self._pin:

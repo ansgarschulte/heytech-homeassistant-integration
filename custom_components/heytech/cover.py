@@ -8,7 +8,7 @@ allowing users to control their Heytech shutters via the Home Assistant interfac
 import logging
 from typing import Any
 
-from homeassistant.components.cover import CoverEntity
+from homeassistant.components.cover import CoverEntity, CoverDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -18,8 +18,16 @@ from . import HeytechApiClient
 from .const import CONF_SHUTTERS, DOMAIN, CONF_MAX_AUTO_SHUTTERS, DEFAULT_MAX_AUTO_SHUTTERS
 from .data import IntegrationHeytechConfigEntry
 
+from homeassistant.components.cover import (
+    CoverEntity,
+    CoverDeviceClass,
+    CoverEntityFeature,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
+# Constants for the cover position
+ATTR_POSITION = "position"
 MAX_POSITION = 100
 MIN_POSITION = 0
 
@@ -125,6 +133,14 @@ async def _async_cleanup_entities_and_devices(
 class HeytechCover(CoverEntity):
     """Representation of a Heytech cover."""
 
+    _attr_is_closed: bool = True  # Default to fully closed
+    _attr_supported_features = (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
+    )
+
     def __init__(
             self,
             name: str,
@@ -137,17 +153,8 @@ class HeytechCover(CoverEntity):
         self._unique_id = unique_id
         self._name = name
         self._channels = channels
-        self._is_closed = True  # Assuming shutters start closed by default
-
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID for this cover."""
-        return self._unique_id
-
-    @property
-    def name(self) -> str:
-        """Return the name of the cover."""
-        return self._name
+        self._attr_name = name
+        self._attr_unique_id = unique_id
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -159,43 +166,26 @@ class HeytechCover(CoverEntity):
             "model": "Shutter",
         }
 
-    @property
-    def is_closed(self) -> bool:
-        """Return if the cover is closed."""
-        return self._is_closed
-
     async def async_open_cover(self, **_kwargs: Any) -> None:
         """Open the cover."""
         _LOGGER.info("Opening %s on channels %s", self._name, self._channels)
-        await self._send_command("open")
-        self._is_closed = False
-        self.async_write_ha_state()
+        await self.async_set_cover_position(position=MAX_POSITION)
 
     async def async_close_cover(self, **_kwargs: Any) -> None:
         """Close the cover."""
         _LOGGER.info("Closing %s on channels %s", self._name, self._channels)
-        await self._send_command("close")
-        self._is_closed = True
+        await self.async_set_cover_position(position=MIN_POSITION)
+
+    async def async_set_cover_position(self, **kwargs: Any) -> None:
+        """Set the cover to a specific position."""
+        position = kwargs[ATTR_POSITION]
+        _LOGGER.info("Setting position of %s to %s%%", self._name, position)
+        self._attr_is_closed = position == MIN_POSITION
+        await self._api_client.add_shutter_command(f"{position}", self._channels)
         self.async_write_ha_state()
 
     async def async_stop_cover(self, **_kwargs: Any) -> None:
         """Stop the cover."""
         _LOGGER.info("Stopping %s on channels %s", self._name, self._channels)
-        await self._send_command("stop")
+        await self._api_client.add_shutter_command("stop", self._channels)
         self.async_write_ha_state()
-
-    async def async_set_cover_position(self, **kwargs: Any) -> None:
-        """Set the cover to a specific position."""
-        position: int = kwargs["position"]
-        _LOGGER.info("Setting position of %s to %s%%", self._name, position)
-        if position == MAX_POSITION:
-            command: str | int = "open"
-        elif position == MIN_POSITION:
-            command = "close"
-        else:
-            command = position
-        await self._send_command(command)
-
-    async def _send_command(self, action: str | int) -> None:
-        """Send a command to the cover."""
-        await self._api_client.add_shutter_command(action, channels=self._channels)

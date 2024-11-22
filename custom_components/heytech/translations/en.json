@@ -24,8 +24,8 @@
         "title": "Manage Shutters",
         "description": "Select an option:",
         "menu_options": {
-          "add_shutter": "Add Shutter",
-          "remove_shutter": "Remove Shutter",
+          "add_shutter": "Add Shutter Group",
+          "remove_shutter": "Remove Shutter Group",
           "finish": "Finish"
         }
       },
