@@ -1,10 +1,16 @@
-# api.py
+"""
+Heytech API Client.
+
+This module provides an API client for interacting with Heytech devices.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import re
+
+MAX_POSITION = 100
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,8 +19,10 @@ COMMAND_DELAY = 0.05  # Delay between commands in seconds
 # Define the maximum number of channels supported by your Heytech system
 MAX_CHANNELS = 32
 
+
 class IntegrationHeytechApiClientError(Exception):
     """Exception to indicate a general API error."""
+
 
 class IntegrationHeytechApiClientCommunicationError(IntegrationHeytechApiClientError):
     """Exception to indicate a communication error."""
@@ -24,6 +32,7 @@ class IntegrationHeytechApiClientCommunicationError(IntegrationHeytechApiClientE
         if self.__cause__:
             return f"Error sending commands: {self.__cause__}"
         return "Error sending commands"
+
 
 class HeytechApiClient:
     """Heytech API Client."""
@@ -140,18 +149,18 @@ class HeytechApiClient:
                     self.shutters = shutters
                     break
         except (
-                asyncio.IncompleteReadError,
-                asyncio.LimitOverrunError,
-                asyncio.StreamReaderProtocolError,
+            asyncio.IncompleteReadError,
+            asyncio.LimitOverrunError,
+            asyncio.StreamReaderProtocolError,
         ):
             _LOGGER.exception("Error while parsing smn output")
 
     async def _listen_for_sop_output(self, reader: asyncio.StreamReader) -> None:
         """Listen and parse the output of the 'sop' command."""
         try:
-            data = b''
-            while b'ende_sop' not in data:
-                chunk = await reader.read(100)
+            data = b""
+            while b"ende_sop" not in data:
+                chunk = await reader.read(MAX_POSITION)
                 if not chunk:
                     break
                 data += chunk
@@ -177,12 +186,17 @@ class HeytechApiClient:
 
             positions_list = positions_str.split(",")
             positions = {}
-            for idx, pos in enumerate(positions_list, start=1):
+            for idx, position in enumerate(positions_list, start=1):
                 if idx > MAX_CHANNELS:
-                    _LOGGER.debug("Ignoring position for channel %d as it exceeds MAX_CHANNELS (%d)", idx, MAX_CHANNELS)
+                    _LOGGER.debug(
+                        "Ignoring position for channel "
+                        "%d as it exceeds MAX_CHANNELS (%d)",
+                        idx,
+                        MAX_CHANNELS,
+                    )
                     break  # Stop processing further channels
 
-                pos = pos.strip()  # Remove any leading/trailing whitespace
+                pos = position.strip()  # Remove any leading/trailing whitespace
 
                 if not pos:
                     _LOGGER.debug("Empty position for channel %d, assigning 0", idx)
@@ -190,17 +204,28 @@ class HeytechApiClient:
                     continue
                 try:
                     position_value = int(pos)
-                    if 0 <= position_value <= 100:
+                    if 0 <= position_value <= MAX_POSITION:
                         positions[idx] = position_value
                     else:
-                        _LOGGER.warning("Position value '%s' for channel %d is out of range (0-100). Assigning 0.", pos, idx)
+                        _LOGGER.warning(
+                            "Position value '%s' for channel %d "
+                            "is out of range (0-100). Assigning 0.",
+                            pos,
+                            idx,
+                        )
                         positions[idx] = 0  # Default to 0% if out of range
                 except ValueError:
-                    _LOGGER.warning("Invalid position value '%s' for channel %d", pos, idx)
+                    _LOGGER.warning(
+                        "Invalid position value '%s' for channel %d", pos, idx
+                    )
                     positions[idx] = 0  # Default to 0% if invalid
             self.shutter_positions = positions
             _LOGGER.debug("Parsed shutter positions: %s", positions)
-        except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, asyncio.StreamReaderProtocolError) as e:
+        except (
+            asyncio.IncompleteReadError,
+            asyncio.LimitOverrunError,
+            asyncio.StreamReaderProtocolError,
+        ):
             _LOGGER.exception("Error while parsing sop output")
             self.shutter_positions = {}
 

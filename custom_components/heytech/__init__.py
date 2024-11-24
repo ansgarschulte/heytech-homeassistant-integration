@@ -1,4 +1,9 @@
-# __init__.py
+"""
+Custom integration to integrate Heytech with Home Assistant.
+
+For more details about this integration, please refer to:
+https://github.com/ansgarschulte/heytech-homeassistant-integration
+"""
 
 from __future__ import annotations
 
@@ -21,9 +26,10 @@ if TYPE_CHECKING:
 PLATFORMS: list[Platform] = [Platform.COVER]
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> bool:
     """Set up Heytech from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -45,12 +51,11 @@ async def async_setup_entry(
     )
     hass.data[DOMAIN][entry.entry_id]["coordinator"] = heytech_coordinator
 
-
     # Load the integration to access runtime data if needed
     try:
         integration = async_get_loaded_integration(hass, entry.domain)
     except Exception as e:
-        _LOGGER.error("Failed to load integration: %s", e)
+        _LOGGER.exception("Failed to load integration")
         raise ConfigEntryNotReady from e
 
     runtime_data = IntegrationHeytechData(
@@ -62,28 +67,22 @@ async def async_setup_entry(
     # Store runtime data in hass.data
     hass.data[DOMAIN][entry.entry_id]["runtime_data"] = runtime_data
 
-    # Test connection to ensure the Heytech device is reachable
-    # try:
-    #     await api_client.async_test_connection()
-    #     _LOGGER.info("Successfully connected to Heytech device at %s:%s", host, port)
-    # except Exception as e:
-    #     _LOGGER.error("Failed to connect to Heytech device at %s:%s - %s", host, port, e)
-    #     raise ConfigEntryNotReady from e  # Signal to Home Assistant to retry setup
-
     # Perform the first refresh to populate initial data
     _LOGGER.debug("Starting first refresh of coordinator.")
     try:
         await heytech_coordinator.async_config_entry_first_refresh()
         _LOGGER.debug("First refresh of coordinator completed successfully.")
     except ConfigEntryNotReady:
-        _LOGGER.error("Initial data fetch failed. Marking config entry as not ready.")
+        _LOGGER.exception(
+            "Initial data fetch failed. Marking config entry as not ready."
+        )
         raise
 
     # Forward setup to the configured platforms (e.g., cover)
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    except Exception as e:
-        _LOGGER.error("Failed to forward entry setup to platforms: %s", e)
+    except Exception:
+        _LOGGER.exception("Failed to forward entry setup to platforms")
         return False
 
     # Add an update listener to handle option changes
@@ -92,9 +91,10 @@ async def async_setup_entry(
     _LOGGER.info("Heytech integration setup successfully for entry %s", entry.entry_id)
     return True
 
+
 async def async_reload_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> None:
     """Reload config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
@@ -103,15 +103,17 @@ async def async_reload_entry(
 
 
 async def async_unload_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
-        _LOGGER.info("Heytech integration entry %s unloaded successfully", entry.entry_id)
+        _LOGGER.info(
+            "Heytech integration entry %s unloaded successfully", entry.entry_id
+        )
     else:
         _LOGGER.warning("Heytech integration entry %s failed to unload", entry.entry_id)
     return unload_ok
