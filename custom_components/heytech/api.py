@@ -1,8 +1,4 @@
-"""
-Heytech API Client.
-
-This module provides an API client for interacting with Heytech devices.
-"""
+# api.py
 
 from __future__ import annotations
 
@@ -14,10 +10,11 @@ _LOGGER = logging.getLogger(__name__)
 
 COMMAND_DELAY = 0.05  # Delay between commands in seconds
 
+# Define the maximum number of channels supported by your Heytech system
+MAX_CHANNELS = 32
 
 class IntegrationHeytechApiClientError(Exception):
     """Exception to indicate a general API error."""
-
 
 class IntegrationHeytechApiClientCommunicationError(IntegrationHeytechApiClientError):
     """Exception to indicate a communication error."""
@@ -27,7 +24,6 @@ class IntegrationHeytechApiClientCommunicationError(IntegrationHeytechApiClientE
         if self.__cause__:
             return f"Error sending commands: {self.__cause__}"
         return "Error sending commands"
-
 
 class HeytechApiClient:
     """Heytech API Client."""
@@ -41,6 +37,7 @@ class HeytechApiClient:
         self._lock = asyncio.Lock()
         self._processing = False
         self.shutters = {}  # Stores the parsed shutters
+        self.shutter_positions: dict[int, int] = {}  # Stores current positions
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
@@ -111,6 +108,8 @@ class HeytechApiClient:
 
                 if command.strip() == "smn":
                     await self._listen_for_smn_output(reader)
+                elif command.strip() == "sop":
+                    await self._listen_for_sop_output(reader)
 
             writer.close()
             await writer.wait_closed()
@@ -141,11 +140,69 @@ class HeytechApiClient:
                     self.shutters = shutters
                     break
         except (
-            asyncio.IncompleteReadError,
-            asyncio.LimitOverrunError,
-            asyncio.StreamReaderProtocolError,
+                asyncio.IncompleteReadError,
+                asyncio.LimitOverrunError,
+                asyncio.StreamReaderProtocolError,
         ):
             _LOGGER.exception("Error while parsing smn output")
+
+    async def _listen_for_sop_output(self, reader: asyncio.StreamReader) -> None:
+        """Listen and parse the output of the 'sop' command."""
+        try:
+            data = b''
+            while b'ende_sop' not in data:
+                chunk = await reader.read(100)
+                if not chunk:
+                    break
+                data += chunk
+
+            line = data.decode("ascii").strip()
+
+            # Handle responses with and without 'start_sop'
+            start_sop = "start_sop"
+            end_sop = "ende_sop"
+
+            if start_sop in line and end_sop in line:
+                # Extract positions between 'start_sop' and 'ende_sop'
+                start_index = line.find(start_sop) + len(start_sop)
+                end_index = line.rfind(end_sop)
+                positions_str = line[start_index:end_index]
+            elif end_sop in line:
+                # No 'start_sop', assume positions start at beginning
+                positions_str = line.split(end_sop)[0].strip(",")
+            else:
+                _LOGGER.error("Unexpected 'sop' response: %s", line)
+                self.shutter_positions = {}
+                return
+
+            positions_list = positions_str.split(",")
+            positions = {}
+            for idx, pos in enumerate(positions_list, start=1):
+                if idx > MAX_CHANNELS:
+                    _LOGGER.debug("Ignoring position for channel %d as it exceeds MAX_CHANNELS (%d)", idx, MAX_CHANNELS)
+                    break  # Stop processing further channels
+
+                pos = pos.strip()  # Remove any leading/trailing whitespace
+
+                if not pos:
+                    _LOGGER.debug("Empty position for channel %d, assigning 0", idx)
+                    positions[idx] = 0
+                    continue
+                try:
+                    position_value = int(pos)
+                    if 0 <= position_value <= 100:
+                        positions[idx] = position_value
+                    else:
+                        _LOGGER.warning("Position value '%s' for channel %d is out of range (0-100). Assigning 0.", pos, idx)
+                        positions[idx] = 0  # Default to 0% if out of range
+                except ValueError:
+                    _LOGGER.warning("Invalid position value '%s' for channel %d", pos, idx)
+                    positions[idx] = 0  # Default to 0% if invalid
+            self.shutter_positions = positions
+            _LOGGER.debug("Parsed shutter positions: %s", positions)
+        except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, asyncio.StreamReaderProtocolError) as e:
+            _LOGGER.exception("Error while parsing sop output")
+            self.shutter_positions = {}
 
     async def async_test_connection(self) -> None:
         """Test connection to the API."""
@@ -154,3 +211,15 @@ class HeytechApiClient:
     async def async_get_data(self) -> None:
         """Send 'smn' command to fetch shutters data."""
         await self.add_shutter_command("smn", [])
+
+    async def async_get_shutter_positions(self) -> dict[int, int]:
+        """Send 'sop' command and parse the shutter positions."""
+        async with self._lock:
+            commands = ["sop\r\n"]
+            self._queue.extend(commands)
+            if not self._processing:
+                self._processing = True
+                await self._process_queue()
+                self._processing = False
+
+            return self.shutter_positions

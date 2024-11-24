@@ -1,9 +1,4 @@
-"""
-Heytech Cover Integration for Home Assistant.
-
-This module provides support for Heytech covers within Home Assistant,
-allowing users to control their Heytech shutters via the Home Assistant interface.
-"""
+# cover.py
 
 import logging
 from typing import Any
@@ -16,8 +11,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import HeytechApiClient
+from .api import IntegrationHeytechApiClientError
 from .const import (
     CONF_MAX_AUTO_SHUTTERS,
     CONF_SHUTTERS,
@@ -25,6 +22,7 @@ from .const import (
     DOMAIN,
 )
 from .data import IntegrationHeytechConfigEntry
+from .coordinator import HeytechDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,13 +33,14 @@ MIN_POSITION = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: IntegrationHeytechConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+        hass: HomeAssistant,
+        entry: IntegrationHeytechConfigEntry,
+        async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Heytech covers based on a config entry."""
     _LOGGER.info("Setting up Heytech covers for entry %s", entry.entry_id)
     api_client: HeytechApiClient = hass.data[DOMAIN][entry.entry_id]["api_client"]
+    coordinator: HeytechDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     # Fetch dynamic shutters from the API
     await api_client.async_get_data()
@@ -86,7 +85,7 @@ async def async_setup_entry(
         unique_id = f"{entry.entry_id}_{name}"
         current_unique_ids.add(unique_id)
         _LOGGER.info("Adding cover '%s' with channels %s", name, channel_list)
-        covers.append(HeytechCover(name, channel_list, api_client, unique_id))
+        covers.append(HeytechCover(name, channel_list, api_client, unique_id, coordinator))
 
     # Add new entities
     async_add_entities(covers)
@@ -96,9 +95,9 @@ async def async_setup_entry(
 
 
 async def _async_cleanup_entities_and_devices(
-    hass: HomeAssistant,
-    entry: IntegrationHeytechConfigEntry,
-    current_unique_ids: set[str],
+        hass: HomeAssistant,
+        entry: IntegrationHeytechConfigEntry,
+        current_unique_ids: set[str],
 ) -> None:
     """Remove entities and devices that are no longer in the configuration."""
     entity_registry = er.async_get(hass)
@@ -140,31 +139,33 @@ async def _async_cleanup_entities_and_devices(
                 device_registry.async_remove_device(device_id)
 
 
-class HeytechCover(CoverEntity):
+class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity):
     """Representation of a Heytech cover."""
 
-    _attr_is_closed: bool = True  # Default to fully closed
     _attr_supported_features = (
-        CoverEntityFeature.OPEN
-        | CoverEntityFeature.CLOSE
-        | CoverEntityFeature.STOP
-        | CoverEntityFeature.SET_POSITION
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
     )
 
     def __init__(
-        self,
-        name: str,
-        channels: list[int],
-        api_client: HeytechApiClient,
-        unique_id: str,
+            self,
+            name: str,
+            channels: list[int],
+            api_client: HeytechApiClient,
+            unique_id: str,
+            coordinator: HeytechDataUpdateCoordinator,
     ) -> None:
         """Initialize the cover."""
+        super().__init__(coordinator)
         self._api_client = api_client
         self._unique_id = unique_id
         self._name = name
         self._channels = channels
         self._attr_name = name
         self._attr_unique_id = unique_id
+        self._position: int | None = None  # Current position
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -175,6 +176,21 @@ class HeytechCover(CoverEntity):
             "manufacturer": "Heytech",
             "model": "Shutter",
         }
+
+    @property
+    def is_closed(self) -> bool:
+        """Return whether the cover is closed based on current position."""
+        if self._position is None:
+            _LOGGER.debug("Cover '%s' position is unknown. Assuming not closed.", self._name)
+            return False  # Unknown state
+        _LOGGER.debug("Cover '%s' is_closed status: %s", self._name, self._position == MIN_POSITION)
+        return self._position == MIN_POSITION
+
+    @property
+    def current_cover_position(self) -> int | None:
+        """Return the current position of the cover."""
+        _LOGGER.debug("Cover '%s' current position: %s", self._name, self._position)
+        return self._position
 
     async def async_open_cover(self, **_kwargs: Any) -> None:
         """Open the cover."""
@@ -188,18 +204,47 @@ class HeytechCover(CoverEntity):
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover to a specific position."""
-        position = kwargs[ATTR_POSITION]
+        position = kwargs.get(ATTR_POSITION)
+        if position is None:
+            _LOGGER.error("Position not provided for setting cover position.")
+            return
         _LOGGER.info("Setting position of %s to %s%%", self._name, position)
-        self._attr_is_closed = position == MIN_POSITION
-        await self._api_client.add_shutter_command(f"{position}", self._channels)
-        self.async_write_ha_state()
+        try:
+            await self._api_client.add_shutter_command(f"{position}", self._channels)
+        except IntegrationHeytechApiClientError as e:
+            _LOGGER.error("Failed to set position for %s: %s", self._name, e)
+            return
+        # The coordinator will update the position on next update
 
     async def async_stop_cover(self, **_kwargs: Any) -> None:
         """Stop the cover."""
         _LOGGER.info("Stopping %s on channels %s", self._name, self._channels)
-        await self._api_client.add_shutter_command("stop", self._channels)
-        self.async_write_ha_state()
+        try:
+            await self._api_client.add_shutter_command("stop", self._channels)
+        except IntegrationHeytechApiClientError as e:
+            _LOGGER.error("Failed to stop %s: %s", self._name, e)
 
+    def _handle_coordinator_update(self) -> None:
+        """Update the cover's state from the coordinator."""
+        _LOGGER.debug("Cover '%s' initiating update from coordinator.", self._name)
+        positions = self.coordinator.data
+        _LOGGER.debug("Cover '%s' received positions from coordinator: %s", self._name, positions)
+        if not self._channels:
+            self._position = None
+        else:
+            # Collect positions for all associated channels
+            channel_positions = [positions.get(channel, None) for channel in self._channels]
+            # Filter out None values
+            channel_positions = [pos for pos in channel_positions if pos is not None]
+            _LOGGER.debug("Cover '%s' channel positions: %s", self._name, channel_positions)
+            if channel_positions:
+                # If multiple channels, decide how to represent the position
+                # Here, we take the average position
+                self._position = sum(channel_positions) // len(channel_positions)
+            else:
+                self._position = None
+        _LOGGER.debug("Cover '%s' updated position to %s%%", self._name, self._position)
+        self.async_write_ha_state()
 
 class InvalidChannelFormatError(TypeError):
     """Exception raised for invalid channel format."""

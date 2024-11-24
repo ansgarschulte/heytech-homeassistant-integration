@@ -1,52 +1,45 @@
-"""
-DataUpdateCoordinator for Heytech.
-
-This module defines the HeytechDataUpdateCoordinator class, which manages data updates
-from the Heytech API for Home Assistant integrations.
-"""
-
-from __future__ import annotations
-
+# coordinator.py
+import logging
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import Any, Dict
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, LOGGER
+from .api import HeytechApiClient
 
-if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-
-    from .api import HeytechApiClient
-    from .data import IntegrationHeytechConfigEntry
-
+_LOGGER = logging.getLogger(__name__)
 
 class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the Heytech API."""
 
-    config_entry: IntegrationHeytechConfigEntry
-
     def __init__(
-        self,
-        hass: HomeAssistant,
-        api_client: HeytechApiClient,
+            self,
+            hass: HomeAssistant,
+            api_client: HeytechApiClient,
     ) -> None:
         """Initialize the data update coordinator."""
         super().__init__(
             hass=hass,
             logger=LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(hours=1),
+            update_interval=timedelta(seconds=30),  # Adjust as needed
         )
         self.api_client = api_client
+        self.shutter_positions: Dict[int, int] = {}
 
-    async def _async_update_data(self) -> None:
+    async def _async_update_data(self) -> Dict[int, int]:
         """Fetch data from the Heytech API."""
         try:
-            # Placeholder for actual data fetching logic
-            return
+            LOGGER.debug("Coordinator: Fetching shutter positions.")
+            positions = await self.api_client.async_get_shutter_positions()
+            LOGGER.debug("Coordinator: Received shutter positions: %s", positions)
+            if not positions:
+                raise UpdateFailed("Failed to retrieve shutter positions.")
+            self.shutter_positions = positions
+            return positions
         except Exception as exception:
-            # EM102: Assign exception message to variable before raising
-            message = str(exception)
-            # TRY003: Avoid specifying long messages outside the exception class
+            message = f"Error fetching shutter positions: {exception}"
+            LOGGER.error(message)
             raise UpdateFailed(message) from exception
