@@ -188,12 +188,6 @@ class HeytechApiClient:
             positions = {}
             for idx, position in enumerate(positions_list, start=1):
                 if idx > MAX_CHANNELS:
-                    _LOGGER.debug(
-                        "Ignoring position for channel "
-                        "%d as it exceeds MAX_CHANNELS (%d)",
-                        idx,
-                        MAX_CHANNELS,
-                    )
                     break  # Stop processing further channels
 
                 pos = position.strip()  # Remove any leading/trailing whitespace

@@ -204,7 +204,6 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
     @property
     def current_cover_position(self) -> int | None:
         """Return the current position of the cover."""
-        _LOGGER.debug("Cover '%s' current position: %s", self._name, self._position)
         return self._position
 
     async def async_open_cover(self, **_kwargs: Any) -> None:

@@ -34,9 +34,7 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[int, int]:
         """Fetch data from the Heytech API."""
         try:
-            LOGGER.debug("Coordinator: Fetching shutter positions.")
             positions = await self.api_client.async_get_shutter_positions()
-            LOGGER.debug("Coordinator: Received shutter positions: %s", positions)
             if not positions:
                 await self._handle_no_positions()
             else:
