@@ -194,11 +194,6 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
                 "Cover '%s' position is unknown. Assuming not closed.", self._name
             )
             return False  # Unknown state
-        _LOGGER.debug(
-            "Cover '%s' is_closed status: %s",
-            self._name,
-            self._position == MIN_POSITION,
-        )
         return self._position == MIN_POSITION
 
     @property

@@ -214,7 +214,6 @@ class HeytechApiClient:
                     )
                     positions[idx] = 0  # Default to 0% if invalid
             self.shutter_positions = positions
-            _LOGGER.debug("Parsed shutter positions: %s", positions)
         except (
             asyncio.IncompleteReadError,
             asyncio.LimitOverrunError,
