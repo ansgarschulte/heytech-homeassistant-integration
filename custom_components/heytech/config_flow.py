@@ -194,10 +194,15 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+
     async def _test_credentials(self, host: str, port: int, pin: str) -> None:
         """Validate credentials."""
         client = HeytechApiClient(host=host, port=int(port), pin=pin)
-        await client.async_test_connection()
+        try:
+            await client.connect()
+            await client.async_test_connection()
+        finally:
+            await client.disconnect()
 
 
 class HeytechOptionsFlowHandler(OptionsFlow):
