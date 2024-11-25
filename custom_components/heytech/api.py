@@ -42,11 +42,13 @@ class HeytechApiClient:
         self._host = host
         self._port = port
         self._pin = pin
-        self._queue: list[str] = []
+        self._queue = asyncio.Queue()
         self._lock = asyncio.Lock()
-        self._processing = False
         self.shutters = {}  # Stores the parsed shutters
         self.shutter_positions: dict[int, int] = {}  # Stores current positions
+        self._reader = None
+        self._writer = None
+        self._connected = False
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
@@ -96,38 +98,62 @@ class HeytechApiClient:
 
     async def add_shutter_command(self, action: str, channels: list[int]) -> None:
         """Add commands to the queue and process them."""
-        async with self._lock:
-            commands = self._generate_shutter_command(action, channels)
-            self._queue.extend(commands)
-            if not self._processing:
-                self._processing = True
-                await self._process_queue()
-                self._processing = False
+        commands = self._generate_shutter_command(action, channels)
+        await self._queue.put(commands)
+        if not self._lock.locked():  # Avoid starting if a process is already running
+            await self._process_queue()
+
+    async def _connect(self):
+        """Establish a connection to the Heytech API."""
+        self._reader, self._writer = await asyncio.open_connection(self._host, self._port)
+        self._connected = True
+        _LOGGER.debug("Connected to Heytech API at %s:%d", self._host, self._port)
+
+    async def _disconnect(self):
+        """Close the connection to the Heytech API."""
+        if self._writer:
+            self._writer.close()
+            await self._writer.wait_closed()
+            _LOGGER.debug("Connection to Heytech API closed")
+        self._connected = False
 
     async def _process_queue(self) -> None:
         """Process all commands in the queue."""
-        try:
-            reader, writer = await asyncio.open_connection(self._host, self._port)
+        async with self._lock:  # Ensure only one instance runs at a time
+            retries = 5
+            backoff = 1
+            for attempt in range(retries):
+                try:
+                    if not self._connected:
+                        await self._connect()
+                    while not self._queue.empty():
+                        commands = await self._queue.get()
+                        while commands:
+                            command = commands.pop(0)
+                            self._writer.write(command.encode("ascii"))
+                            await self._writer.drain()
+                            await asyncio.sleep(COMMAND_DELAY)
 
-            while self._queue:
-                command = self._queue.pop(0)
-                writer.write(command.encode("ascii"))
-                await writer.drain()
-                await asyncio.sleep(COMMAND_DELAY)
-
-                if command.strip() == "smn":
-                    await self._listen_for_smn_output(reader)
-                elif command.strip() == "sop":
-                    await self._listen_for_sop_output(reader)
-
-            writer.close()
-            await writer.wait_closed()
-
-        except Exception as exception:
-            _LOGGER.exception("Error sending commands")
-            raise IntegrationHeytechApiClientCommunicationError from exception
-        finally:
-            self._queue.clear()
+                            if command.strip() == "smn":
+                                await self._listen_for_smn_output(self._reader)
+                            elif command.strip() == "sop":
+                                await self._listen_for_sop_output(self._reader)
+                except ConnectionRefusedError as exc:
+                    _LOGGER.error("Connection refused: %s", exc)
+                    if attempt < retries - 1:
+                        _LOGGER.info("Retrying in %d seconds", backoff)
+                        await asyncio.sleep(backoff)
+                        backoff += 1
+                    else:
+                        _LOGGER.exception("Error sending commands %s", self._queue)
+                        self._connected = False
+                        await self._disconnect()
+                        raise IntegrationHeytechApiClientCommunicationError from exc
+                except Exception as exc:
+                    _LOGGER.error("Error processing command: %s", exc)
+                    self._connected = False
+                    await self._disconnect()
+                    raise IntegrationHeytechApiClientCommunicationError from exc
 
     async def _listen_for_smn_output(self, reader: asyncio.StreamReader) -> None:
         """Listen and parse the output of the 'smn' command."""
@@ -228,16 +254,25 @@ class HeytechApiClient:
 
     async def async_get_data(self) -> None:
         """Send 'smn' command to fetch shutters data."""
-        await self.add_shutter_command("smn", [])
+        try:
+            await self.add_shutter_command("smn", [])
+        except IntegrationHeytechApiClientCommunicationError as exc:
+            _LOGGER.error("Failed to get data from Heytech API: %s", exc)
 
     async def async_get_shutter_positions(self) -> dict[int, int]:
         """Send 'sop' command and parse the shutter positions."""
-        async with self._lock:
-            commands = ["sop\r\n"]
-            self._queue.extend(commands)
-            if not self._processing:
-                self._processing = True
-                await self._process_queue()
-                self._processing = False
+        commands = ["sop\r\n"]
+        await self._queue.put(commands)
+        if not self._lock.locked():
+            await self._process_queue()
+        else:
+            """ Wait for the lock to be released """
+            _LOGGER.debug("Waiting for the lock to be released")
+            while self._lock.locked():
+                await asyncio.sleep(0.1)
 
-            return self.shutter_positions
+        return self.shutter_positions
+
+    async def stop(self):
+        """Gracefully stop the API client."""
+        await self._disconnect()
