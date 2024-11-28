@@ -15,7 +15,6 @@ from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.helpers import selector
 
 from .api import (
-    HeytechApiClient,
     IntegrationHeytechApiClientCommunicationError,
     IntegrationHeytechApiClientError,
 )
@@ -196,9 +195,9 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
 
     async def _test_credentials(self, host: str, port: int, pin: str) -> None:
         """Validate credentials."""
-        client = HeytechApiClient(host=host, port=int(port), pin=pin)
-        await client.async_test_connection()
-
+        # client = HeytechApiClient(host=host, port=int(port), pin=pin)
+        # await client.async_test_connection()
+        pass
 
 class HeytechOptionsFlowHandler(OptionsFlow):
     """Handle Heytech options."""

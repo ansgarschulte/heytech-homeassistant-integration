@@ -41,6 +41,7 @@ async def async_setup_entry(
     pin = data.get(CONF_PIN, "")
 
     # Create API client instance
+    _LOGGER.debug("Creating Heytech API client.")
     api_client = HeytechApiClient(host=host, port=port, pin=pin)
     hass.data[DOMAIN][entry.entry_id]["api_client"] = api_client
 

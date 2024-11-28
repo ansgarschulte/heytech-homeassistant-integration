@@ -4,20 +4,21 @@ Heytech API Client.
 This module provides an API client for interacting with Heytech devices.
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging
-import re
+from asyncio import Queue, sleep
+from typing import Any, Dict
 
-MAX_POSITION = 100
+import telnetlib3
+
+
+from custom_components.heytech.parse_helper import parse_shutter_positions, START_SOP, END_SOP, \
+    parse_smn_output, START_SMN, END_SMN, START_SMC, END_SMC, parse_smc_output
 
 _LOGGER = logging.getLogger(__name__)
 
-COMMAND_DELAY = 0.05  # Delay between commands in seconds
-
-# Define the maximum number of channels supported by your Heytech system
-MAX_CHANNELS = 32
+COMMAND_DELAY = 0.05
 
 
 class IntegrationHeytechApiClientError(Exception):
@@ -35,20 +36,45 @@ class IntegrationHeytechApiClientCommunicationError(IntegrationHeytechApiClientE
 
 
 class HeytechApiClient:
-    """Heytech API Client."""
-
-    def __init__(self, host: str, port: int, pin: str = "") -> None:
-        """Initialize the Heytech API client."""
-        self._host = host
-        self._port = port
+    def __init__(self, host: str, port: int = 1002, pin: str = "", idle_timeout=10):
         self._pin = pin
-        self._queue = asyncio.Queue()
-        self._lock = asyncio.Lock()
-        self.shutters = {}  # Stores the parsed shutters
-        self.shutter_positions: dict[int, int] = {}  # Stores current positions
-        self._reader = None
-        self._writer = None
-        self._connected = False
+        self.host = host
+        self.port = port
+        self.idle_timeout = idle_timeout
+        self.command_queue = Queue()
+        self.connected = False
+        self.reader = None
+        self.writer = None
+        self.last_activity = None
+        self.connection_task = None
+        self.read_task = None
+        self.idle_task = None
+        self.max_channels = None
+        self.shutter_positions: dict[int, int] = {}
+        self.shutters: dict[Any, dict[str, int]] = {}
+
+    async def connect(self):
+        if not self.connected:
+            try:
+                self.reader, self.writer = await telnetlib3.open_connection(
+                    self.host, self.port
+                )
+                self.connected = True
+                self.last_activity = asyncio.get_event_loop().time()
+                self.read_task = asyncio.create_task(self._read_output())
+                self.idle_task = asyncio.create_task(self._idle_checker())
+            except Exception as e:
+                print(f"Connection error: {e}")
+
+    async def disconnect(self):
+        if self.connected:
+            if self.read_task:
+                self.read_task.cancel()
+            if self.idle_task:
+                self.idle_task.cancel()
+            self.writer.close()
+            self.connected = False
+
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
@@ -56,18 +82,12 @@ class HeytechApiClient:
             "open": "up",
             "close": "down",
             "stop": "off",
-            "sss": "sss",
-            "smn": "smn",
         }
 
-        if action.isdigit():
-            shutter_command = action
-        else:
-            if action not in command_map:
-                _LOGGER.error("Unknown action: %s", action)
-                message = f"Unknown action: {action}"
-                raise ValueError(message)
+        if action in command_map:
             shutter_command = command_map[action]
+        else:
+            shutter_command = action
 
         commands: list[str] = []
 
@@ -80,7 +100,7 @@ class HeytechApiClient:
                 ]
             )
 
-        if action == "smn":
+        if not channels:
             commands.append(f"{shutter_command}\r\n")
         else:
             for channel in channels:
@@ -99,180 +119,118 @@ class HeytechApiClient:
     async def add_shutter_command(self, action: str, channels: list[int]) -> None:
         """Add commands to the queue and process them."""
         commands = self._generate_shutter_command(action, channels)
-        await self._queue.put(commands)
-        if not self._lock.locked():  # Avoid starting if a process is already running
-            await self._process_queue()
-
-    async def _connect(self):
-        """Establish a connection to the Heytech API."""
-        self._reader, self._writer = await asyncio.open_connection(self._host, self._port)
-        self._connected = True
-        _LOGGER.debug("Connected to Heytech API at %s:%d", self._host, self._port)
-
-    async def _disconnect(self):
-        """Close the connection to the Heytech API."""
-        if self._writer:
-            self._writer.close()
-            await self._writer.wait_closed()
-            _LOGGER.debug("Connection to Heytech API closed")
-        self._connected = False
-
-    async def _process_queue(self) -> None:
-        """Process all commands in the queue."""
-        async with self._lock:  # Ensure only one instance runs at a time
-            retries = 5
-            backoff = 1
-            for attempt in range(retries):
-                try:
-                    if not self._connected:
-                        await self._connect()
-                    while not self._queue.empty():
-                        commands = await self._queue.get()
-                        while commands:
-                            command = commands.pop(0)
-                            self._writer.write(command.encode("ascii"))
-                            await self._writer.drain()
-                            await asyncio.sleep(COMMAND_DELAY)
-
-                            if command.strip() == "smn":
-                                await self._listen_for_smn_output(self._reader)
-                            elif command.strip() == "sop":
-                                await self._listen_for_sop_output(self._reader)
-                except ConnectionRefusedError as exc:
-                    _LOGGER.error("Connection refused: %s", exc)
-                    if attempt < retries - 1:
-                        _LOGGER.info("Retrying in %d seconds", backoff)
-                        await asyncio.sleep(backoff)
-                        backoff += 1
-                    else:
-                        _LOGGER.exception("Error sending commands %s", self._queue)
-                        self._connected = False
-                        await self._disconnect()
-                        raise IntegrationHeytechApiClientCommunicationError from exc
-                except Exception as exc:
-                    _LOGGER.error("Error processing command: %s", exc)
-                    self._connected = False
-                    await self._disconnect()
-                    raise IntegrationHeytechApiClientCommunicationError from exc
-
-    async def _listen_for_smn_output(self, reader: asyncio.StreamReader) -> None:
-        """Listen and parse the output of the 'smn' command."""
-        shutters = {}
-        try:
-            while True:
-                line = await reader.readline()
-                line = line.decode("ascii").strip()
-
-                if line.startswith("start_smn"):
-                    match = re.match(r"start_smn(\d+),(.+?),(\d+),ende_smn", line)
-                    if match:
-                        channel = int(match.group(1))
-                        name = match.group(2).strip()
-                        shutters[name] = {"channel": channel}
-
-                elif line.startswith("start_sti"):
-                    _LOGGER.info("Finished parsing shutters: %s", shutters)
-                    self.shutters = shutters
-                    break
-        except (
-            asyncio.IncompleteReadError,
-            asyncio.LimitOverrunError,
-            asyncio.StreamReaderProtocolError,
-        ):
-            _LOGGER.exception("Error while parsing smn output")
-
-    async def _listen_for_sop_output(self, reader: asyncio.StreamReader) -> None:
-        """Listen and parse the output of the 'sop' command."""
-        try:
-            data = b""
-            while b"ende_sop" not in data:
-                chunk = await reader.read(MAX_POSITION)
-                if not chunk:
-                    break
-                data += chunk
-
-            line = data.decode("ascii").strip()
-
-            # Handle responses with and without 'start_sop'
-            start_sop = "start_sop"
-            end_sop = "ende_sop"
-
-            if start_sop in line and end_sop in line:
-                # Extract positions between 'start_sop' and 'ende_sop'
-                start_index = line.find(start_sop) + len(start_sop)
-                end_index = line.rfind(end_sop)
-                positions_str = line[start_index:end_index]
-            elif end_sop in line:
-                # No 'start_sop', assume positions start at beginning
-                positions_str = line.split(end_sop)[0].strip(",")
-            else:
-                _LOGGER.error("Unexpected 'sop' response: %s", line)
-                self.shutter_positions = {}
-                return
-
-            positions_list = positions_str.split(",")
-            positions = {}
-            for idx, position in enumerate(positions_list, start=1):
-                if idx > MAX_CHANNELS:
-                    break  # Stop processing further channels
-
-                pos = position.strip()  # Remove any leading/trailing whitespace
-
-                if not pos:
-                    _LOGGER.debug("Empty position for channel %d, assigning 0", idx)
-                    positions[idx] = 0
-                    continue
-                try:
-                    position_value = int(pos)
-                    if 0 <= position_value <= MAX_POSITION:
-                        positions[idx] = position_value
-                    else:
-                        _LOGGER.warning(
-                            "Position value '%s' for channel %d "
-                            "is out of range (0-100). Assigning 0.",
-                            pos,
-                            idx,
-                        )
-                        positions[idx] = 0  # Default to 0% if out of range
-                except ValueError:
-                    _LOGGER.warning(
-                        "Invalid position value '%s' for channel %d", pos, idx
-                    )
-                    positions[idx] = 0  # Default to 0% if invalid
-            self.shutter_positions = positions
-        except (
-            asyncio.IncompleteReadError,
-            asyncio.LimitOverrunError,
-            asyncio.StreamReaderProtocolError,
-        ):
-            _LOGGER.exception("Error while parsing sop output")
-            self.shutter_positions = {}
+        _LOGGER.debug("Adding command to queue: %s", commands)
+        for command in commands:
+            await self.command_queue.put(command)
+        await self.connect()
+        if self.connection_task is None or self.connection_task.done():
+            self.connection_task = asyncio.create_task(self._process_commands())
 
     async def async_test_connection(self) -> None:
         """Test connection to the API."""
-        await self.add_shutter_command("sss", [])
+        await self.add_shutter_command("sti", [])
 
-    async def async_get_data(self) -> None:
+    async def async_get_data(self) -> dict[Any, dict[str, int]]:
         """Send 'smn' command to fetch shutters data."""
         try:
+            await self.add_shutter_command("smc", [])
             await self.add_shutter_command("smn", [])
+
+            max_wait = 50
+            while not self.max_channels and max_wait > 0:
+                await asyncio.sleep(0.1)
+
+            max_wait = 50
+            while len(self.shutters) < self.max_channels and max_wait > 0:
+                await asyncio.sleep(0.1)
+            return self.shutters
         except IntegrationHeytechApiClientCommunicationError as exc:
             _LOGGER.error("Failed to get data from Heytech API: %s", exc)
 
+
     async def async_get_shutter_positions(self) -> dict[int, int]:
         """Send 'sop' command and parse the shutter positions."""
-        commands = ["sop\r\n"]
-        await self._queue.put(commands)
-        if not self._lock.locked():
-            await self._process_queue()
-        else:
-            """ Wait for the lock to be released """
-            _LOGGER.debug("Waiting for the lock to be released")
-            while self._lock.locked():
-                await asyncio.sleep(0.1)
+        self.shutter_positions = {}
+        await self.add_shutter_command("sop", [])
+        # wait for the sop command to be processed
+        max_wait = 50
+        while not self.shutter_positions and max_wait > 0:
+            await asyncio.sleep(0.1)
+            max_wait -= 1
 
+        _LOGGER.debug("Returning shutter positions: %s", self.shutter_positions)
         return self.shutter_positions
+
+    async def _process_commands(self):
+        while not self.command_queue.empty():
+            command = await self.command_queue.get()
+            print(f"Sending command: {command}")
+            self.writer.write(command)
+            await self.writer.drain()
+            self.last_activity = asyncio.get_event_loop().time()
+            await asyncio.sleep(COMMAND_DELAY)
+        self.connection_task = None
+
+    async def _read_output(self):
+        while self.connected:
+            try:
+                line = await self.reader.readline()
+                if line == '':
+                    break
+                print(f"Received line: {line.strip()}")
+                if START_SOP in line and END_SOP in line:
+                    self.shutter_positions = parse_shutter_positions(line)
+                elif START_SMN in line and END_SMN in line:
+                    one_shutter = parse_smn_output(line)
+                    self.shutters = self.shutters | one_shutter
+                elif START_SMC in line and END_SMC in line:
+                    self.max_channels = parse_smc_output(line)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                _LOGGER.error(f"Read error: {e}")
+                break
+
+
+    async def _idle_checker(self):
+        while self.connected:
+            await asyncio.sleep(1)
+            current_time = asyncio.get_event_loop().time()
+            if (
+                    current_time - self.last_activity > self.idle_timeout
+                    and self.command_queue.empty()
+            ):
+                await self.disconnect()
 
     async def stop(self):
         """Gracefully stop the API client."""
-        await self._disconnect()
+        if self.connection_task and not self.connection_task.done():
+            self.connection_task.cancel()
+        await self.disconnect()
+
+# Usage example
+async def main():
+    logging.basicConfig(level=logging.DEBUG)
+    # Replace 'your_device_ip' with the actual IP address of your Heytech device
+    client = HeytechTelnetClient('10.0.1.6')
+
+    # Send commands
+    # await client.send_command('smn\r\n')
+    # await client.send_command('sop')
+    positions = await client.async_get_shutter_positions()
+    _LOGGER.info(f"positions %s", positions)
+
+    shutters = await client.async_get_data()
+    _LOGGER.info(f"shutters %s", shutters)
+    # Process output
+    # async for output_line in client.get_output():
+    #     _LOGGER.info(f"Received: {output_line}")
+
+    # Wait for a while to allow for idle timeout
+    await asyncio.sleep(15)
+
+    # Close the client explicitly if needed
+    await client.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
