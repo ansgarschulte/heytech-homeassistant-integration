@@ -7,11 +7,10 @@ This module provides an API client for interacting with Heytech devices.
 
 import asyncio
 import logging
-from asyncio import Queue, sleep
-from typing import Any, Dict
+from asyncio import Queue
+from typing import Any
 
 import telnetlib3
-
 
 from custom_components.heytech.parse_helper import parse_shutter_positions, START_SOP, END_SOP, \
     parse_smn_output, START_SMN, END_SMN, START_SMC, END_SMC, parse_smc_output
@@ -64,7 +63,7 @@ class HeytechApiClient:
                 self.read_task = asyncio.create_task(self._read_output())
                 self.idle_task = asyncio.create_task(self._idle_checker())
             except Exception as e:
-                print(f"Connection error: {e}")
+                _LOGGER.error(f"Connection error: {e}")
 
     async def disconnect(self):
         if self.connected:
@@ -164,7 +163,6 @@ class HeytechApiClient:
     async def _process_commands(self):
         while not self.command_queue.empty():
             command = await self.command_queue.get()
-            print(f"Sending command: {command}")
             self.writer.write(command)
             await self.writer.drain()
             self.last_activity = asyncio.get_event_loop().time()
@@ -177,7 +175,6 @@ class HeytechApiClient:
                 line = await self.reader.readline()
                 if line == '':
                     break
-                print(f"Received line: {line.strip()}")
                 if START_SOP in line and END_SOP in line:
                     self.shutter_positions = parse_shutter_positions(line)
                 elif START_SMN in line and END_SMN in line:

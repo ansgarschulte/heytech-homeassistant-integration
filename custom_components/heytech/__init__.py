@@ -28,45 +28,47 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
 ) -> bool:
     """Set up Heytech from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {}
+    hass.data[DOMAIN].setdefault(entry.entry_id, {})  # Use setdefault instead of overwriting
 
     data = {**entry.data, **entry.options}
     host = data[CONF_HOST]
     port = data[CONF_PORT]
     pin = data.get(CONF_PIN, "")
 
-    # Create API client instance
-    _LOGGER.debug("Creating Heytech API client.")
-    api_client = HeytechApiClient(host=host, port=port, pin=pin)
-    hass.data[DOMAIN][entry.entry_id]["api_client"] = api_client
+    # Retrieve existing API client instance if available
+    api_client = hass.data[DOMAIN][entry.entry_id].get("api_client")
+    if api_client:
+        # Check if connection parameters have changed
+        if (
+                api_client.host != host
+                or api_client.port != port
+                or api_client.pin != pin
+        ):
+            _LOGGER.debug("Connection parameters changed, updating Heytech API client.")
+            # Update the existing api_client with new parameters
+            api_client.update_connection_params(host=host, port=port, pin=pin)
+    else:
+        _LOGGER.debug("Creating Heytech API client.")
+        api_client = HeytechApiClient(host=host, port=port, pin=pin)
+        hass.data[DOMAIN][entry.entry_id]["api_client"] = api_client
 
     # Initialize the DataUpdateCoordinator for periodic updates
-    heytech_coordinator = HeytechDataUpdateCoordinator(
-        hass=hass,
-        api_client=api_client,
-    )
-    hass.data[DOMAIN][entry.entry_id]["coordinator"] = heytech_coordinator
-
-    # Load the integration to access runtime data if needed
-    try:
-        integration = async_get_loaded_integration(hass, entry.domain)
-    except Exception as e:
-        _LOGGER.exception("Failed to load integration")
-        raise ConfigEntryNotReady from e
-
-    runtime_data = IntegrationHeytechData(
-        client=api_client,
-        integration=integration,
-        coordinator=heytech_coordinator,
-    )
-
-    # Store runtime data in hass.data
-    hass.data[DOMAIN][entry.entry_id]["runtime_data"] = runtime_data
+    heytech_coordinator = hass.data[DOMAIN][entry.entry_id].get("coordinator")
+    if not heytech_coordinator:
+        _LOGGER.debug("Creating Heytech DataUpdateCoordinator.")
+        heytech_coordinator = HeytechDataUpdateCoordinator(
+            hass=hass,
+            api_client=api_client,
+        )
+        hass.data[DOMAIN][entry.entry_id]["coordinator"] = heytech_coordinator
+    else:
+        # Update the coordinator's api_client if it has changed
+        heytech_coordinator.api_client = api_client
 
     # Perform the first refresh to populate initial data
     _LOGGER.debug("Starting first refresh of coordinator.")
@@ -94,13 +96,11 @@ async def async_setup_entry(
 
 
 async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
 ) -> None:
     """Reload config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
 
 
 async def async_unload_entry(
