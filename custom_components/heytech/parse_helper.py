@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Any
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -14,6 +14,7 @@ START_SMN = "start_smn"
 END_SMN = "ende_smn"
 START_SMC = "start_smc"
 END_SMC = "ende_smc"
+
 
 def parse_shutter_positions(line: str) -> dict[int, int]:
     # Handle responses with and without 'start_sop'
@@ -55,14 +56,12 @@ def parse_shutter_positions(line: str) -> dict[int, int]:
                 )
                 positions[idx] = 0  # Default to 0% if out of range
         except ValueError:
-            _LOGGER.warning(
-                "Invalid position value '%s' for channel %d", pos, idx
-            )
+            _LOGGER.warning("Invalid position value '%s' for channel %d", pos, idx)
             positions[idx] = 0  # Default to 0% if invalid
     return positions
 
 
-def parse_smn_output(line:str) -> dict[Any, dict[str, int]]:
+def parse_smn_output(line: str) -> dict[Any, dict[str, int]]:
     """Listen and parse the output of the 'smn' command."""
     shutters = {}
 
@@ -73,6 +72,7 @@ def parse_smn_output(line:str) -> dict[Any, dict[str, int]]:
             name = match.group(2).strip()
             shutters[name] = {"channel": channel}
     return shutters
+
 
 def parse_smc_output(line: str) -> int:
     """Parse the output of the 'smc' command."""

@@ -197,7 +197,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
         """Validate credentials."""
         # client = HeytechApiClient(host=host, port=int(port), pin=pin)
         # await client.async_test_connection()
-        pass
+
 
 class HeytechOptionsFlowHandler(OptionsFlow):
     """Handle Heytech options."""

@@ -28,12 +28,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> bool:
     """Set up Heytech from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN].setdefault(entry.entry_id, {})  # Use setdefault instead of overwriting
+    hass.data[DOMAIN].setdefault(
+        entry.entry_id, {}
+    )  # Use setdefault instead of overwriting
 
     data = {**entry.data, **entry.options}
     host = data[CONF_HOST]
@@ -44,11 +46,7 @@ async def async_setup_entry(
     api_client = hass.data[DOMAIN][entry.entry_id].get("api_client")
     if api_client:
         # Check if connection parameters have changed
-        if (
-                api_client.host != host
-                or api_client.port != port
-                or api_client.pin != pin
-        ):
+        if api_client.host != host or api_client.port != port or api_client.pin != pin:
             _LOGGER.debug("Connection parameters changed, updating Heytech API client.")
             # Update the existing api_client with new parameters
             api_client.update_connection_params(host=host, port=port, pin=pin)
@@ -96,8 +94,8 @@ async def async_setup_entry(
 
 
 async def async_reload_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> None:
     """Reload config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)

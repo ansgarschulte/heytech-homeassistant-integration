@@ -4,7 +4,6 @@ Heytech API Client.
 This module provides an API client for interacting with Heytech devices.
 """
 
-
 import asyncio
 import logging
 from asyncio import Queue
@@ -12,8 +11,17 @@ from typing import Any
 
 import telnetlib3
 
-from custom_components.heytech.parse_helper import parse_shutter_positions, START_SOP, END_SOP, \
-    parse_smn_output, START_SMN, END_SMN, START_SMC, END_SMC, parse_smc_output
+from custom_components.heytech.parse_helper import (
+    END_SMC,
+    END_SMN,
+    END_SOP,
+    START_SMC,
+    START_SMN,
+    START_SOP,
+    parse_shutter_positions,
+    parse_smc_output,
+    parse_smn_output,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +81,6 @@ class HeytechApiClient:
                 self.idle_task.cancel()
             self.writer.close()
             self.connected = False
-
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
@@ -146,7 +153,6 @@ class HeytechApiClient:
         except IntegrationHeytechApiClientCommunicationError as exc:
             _LOGGER.error("Failed to get data from Heytech API: %s", exc)
 
-
     async def async_get_shutter_positions(self) -> dict[int, int]:
         """Send 'sop' command and parse the shutter positions."""
         self.shutter_positions = {}
@@ -173,7 +179,7 @@ class HeytechApiClient:
         while self.connected:
             try:
                 line = await self.reader.readline()
-                if line == '':
+                if line == "":
                     break
                 if START_SOP in line and END_SOP in line:
                     self.shutter_positions = parse_shutter_positions(line)
@@ -188,14 +194,13 @@ class HeytechApiClient:
                 _LOGGER.error(f"Read error: {e}")
                 break
 
-
     async def _idle_checker(self):
         while self.connected:
             await asyncio.sleep(1)
             current_time = asyncio.get_event_loop().time()
             if (
-                    current_time - self.last_activity > self.idle_timeout
-                    and self.command_queue.empty()
+                current_time - self.last_activity > self.idle_timeout
+                and self.command_queue.empty()
             ):
                 await self.disconnect()
 
@@ -205,20 +210,21 @@ class HeytechApiClient:
             self.connection_task.cancel()
         await self.disconnect()
 
+
 # Usage example
 async def main():
     logging.basicConfig(level=logging.DEBUG)
     # Replace 'your_device_ip' with the actual IP address of your Heytech device
-    client = HeytechTelnetClient('10.0.1.6')
+    client = HeytechTelnetClient("10.0.1.6")
 
     # Send commands
     # await client.send_command('smn\r\n')
     # await client.send_command('sop')
     positions = await client.async_get_shutter_positions()
-    _LOGGER.info(f"positions %s", positions)
+    _LOGGER.info("positions %s", positions)
 
     shutters = await client.async_get_data()
-    _LOGGER.info(f"shutters %s", shutters)
+    _LOGGER.info("shutters %s", shutters)
     # Process output
     # async for output_line in client.get_output():
     #     _LOGGER.info(f"Received: {output_line}")
@@ -228,6 +234,7 @@ async def main():
 
     # Close the client explicitly if needed
     await client.stop()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
