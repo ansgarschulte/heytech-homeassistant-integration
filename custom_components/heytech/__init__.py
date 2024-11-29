@@ -46,10 +46,11 @@ async def async_setup_entry(
     api_client = hass.data[DOMAIN][entry.entry_id].get("api_client")
     if api_client:
         # Check if connection parameters have changed
-        if api_client.host != host or api_client.port != port or api_client.pin != pin:
-            _LOGGER.debug("Connection parameters changed, updating Heytech API client.")
-            # Update the existing api_client with new parameters
-            api_client.update_connection_params(host=host, port=port, pin=pin)
+        _LOGGER.debug("ToDo: Checking if connection parameters have changed.")
+        # if api_client.host != host or api_client.port != port or api_client.pin != pin:
+        #     _LOGGER.debug("Connection parameters changed, updating Heytech API client.")
+        #     # Update the existing api_client with new parameters
+        #     api_client.update_connection_params(host=host, port=port, pin=pin)
     else:
         _LOGGER.debug("Creating Heytech API client.")
         api_client = HeytechApiClient(host=host, port=port, pin=pin)
