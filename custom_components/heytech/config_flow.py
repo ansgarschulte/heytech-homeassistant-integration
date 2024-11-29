@@ -7,21 +7,21 @@ setting up Heytech devices in Home Assistant.
 
 from __future__ import annotations
 
-from asyncio import sleep
 from typing import Any
+from typing import TYPE_CHECKING
 
 import voluptuous as vol
-from homeassistant import data_entry_flow  # Moved outside of TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.helpers import selector
 
 from .api import (
     IntegrationHeytechApiClientCommunicationError,
-    IntegrationHeytechApiClientError, HeytechApiClient,
-)
+    IntegrationHeytechApiClientError, )
 from .const import CONF_MAX_AUTO_SHUTTERS, CONF_PIN, CONF_SHUTTERS, DOMAIN, LOGGER
 
+if TYPE_CHECKING:
+    from homeassistant import data_entry_flow
 
 class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
     """Config flow for Heytech."""
