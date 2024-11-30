@@ -52,7 +52,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
         _errors: dict[str, str] = {}
         if user_input is not None:
             self._host = user_input[CONF_HOST]
-            self._port = user_input[CONF_PORT]
+            self._port = int(user_input.get(CONF_PORT, "1002"))
             self._pin = user_input.get(CONF_PIN, "")
             self._max_auto_shutters = user_input.get(CONF_MAX_AUTO_SHUTTERS, 10)
             self._add_custom_shutters = user_input.get("add_custom_shutters", False)
@@ -162,7 +162,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                 data={
                     CONF_HOST: self._host,
                     CONF_PORT: self._port,
-                    CONF_PIN: self._pin,
+                    CONF_PIN: int(self._pin),
                     CONF_MAX_AUTO_SHUTTERS: self._max_auto_shutters,
                     CONF_SHUTTERS: self._shutters,
                 },

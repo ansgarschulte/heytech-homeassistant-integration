@@ -1,15 +1,13 @@
 """
 Heytech API Client.
 
-This module provides an API client for interacting with Heytech devices.
+This module provides an API client for interacting with Heytech devices without using external libraries.
 """
 
 import asyncio
 import logging
 from asyncio import Queue
-from typing import Any
-
-import telnetlib3
+from typing import Any, Dict, Optional
 
 from custom_components.heytech.parse_helper import (
     END_SMC,
@@ -26,6 +24,8 @@ from custom_components.heytech.parse_helper import (
 _LOGGER = logging.getLogger(__name__)
 
 COMMAND_DELAY = 0.05
+MAX_RETRIES = 3  # Maximum number of retries for sending commands
+RETRY_DELAY = 1  # Delay between retries in seconds
 
 
 class IntegrationHeytechApiClientError(Exception):
@@ -38,49 +38,76 @@ class IntegrationHeytechApiClientCommunicationError(IntegrationHeytechApiClientE
     def __str__(self) -> str:
         """Return a string representation of the error."""
         if self.__cause__:
-            return f"Error sending commands: {self.__cause__}"
-        return "Error sending commands"
+            return f"Error communicating with Heytech device: {self.__cause__}"
+        return "Error communicating with Heytech device"
 
 
 class HeytechApiClient:
     def __init__(self, host: str, port: int = 1002, pin: str = "", idle_timeout=10):
         self._pin = pin
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.idle_timeout = idle_timeout
-        self.command_queue = Queue()
+        self.command_queue: Queue[str] = Queue()
         self.connected = False
-        self.reader = None
-        self.writer = None
-        self.last_activity = None
-        self.connection_task = None
-        self.read_task = None
-        self.idle_task = None
-        self.max_channels = None
-        self.shutter_positions: dict[int, int] = {}
-        self.shutters: dict[Any, dict[str, int]] = {}
+        self.reader: Optional[asyncio.StreamReader] = None
+        self.writer: Optional[asyncio.StreamWriter] = None
+        self.last_activity: float = 0.0
+        self.connection_task: Optional[asyncio.Task] = None
+        self.read_task: Optional[asyncio.Task] = None
+        self.idle_task: Optional[asyncio.Task] = None
+        self.max_channels: Optional[int] = None
+        self.shutter_positions: Dict[int, int] = {}
+        self.shutters: Dict[Any, Dict[str, int]] = {}
+        self._reconnecting = False
 
     async def connect(self):
-        if not self.connected:
+        retries = 0
+        while not self.connected and retries < MAX_RETRIES:
             try:
-                self.reader, self.writer = await telnetlib3.open_connection(
+                _LOGGER.debug(f"Attempting to connect to {self.host}:{self.port}")
+                self.reader, self.writer = await asyncio.open_connection(
                     self.host, self.port
                 )
                 self.connected = True
                 self.last_activity = asyncio.get_event_loop().time()
                 self.read_task = asyncio.create_task(self._read_output())
                 self.idle_task = asyncio.create_task(self._idle_checker())
+                _LOGGER.debug("Connected to Heytech device at %s:%s", self.host, self.port)
             except Exception as e:
-                _LOGGER.error(f"Connection error: {e}")
+                retries += 1
+                _LOGGER.error(f"Connection error: {e}. Retry {retries}/{MAX_RETRIES}")
+                await asyncio.sleep(RETRY_DELAY)
+        if not self.connected:
+            _LOGGER.error(f"Failed to connect to Heytech device after {MAX_RETRIES} retries.")
+            raise IntegrationHeytechApiClientCommunicationError("Failed to connect to Heytech device")
 
     async def disconnect(self):
         if self.connected:
+            _LOGGER.debug("Disconnecting from Heytech device")
             if self.read_task:
                 self.read_task.cancel()
+                self.read_task = None
             if self.idle_task:
                 self.idle_task.cancel()
-            self.writer.close()
+                self.idle_task = None
+            if self.connection_task:
+                self.connection_task.cancel()
+                self.connection_task = None
+            if self.writer:
+                self.writer.close()
+                try:
+                    await asyncio.shield(self.writer.wait_closed())
+                except asyncio.CancelledError:
+                    _LOGGER.debug("CancelledError caught during wait_closed()")
+                    # Optionally re-raise if you want the cancellation to propagate
+                    # raise
+                except Exception as e:
+                    _LOGGER.error(f"Error while closing the connection: {e}")
+                self.writer = None
+            self.reader = None
             self.connected = False
+            _LOGGER.debug("Disconnected from Heytech device")
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
@@ -112,11 +139,14 @@ class HeytechApiClient:
             for channel in channels:
                 commands.extend(
                     [
-                        "rhi\r\n\r\n",
+                        "rhi\r\n",
+                        "\r\n",
                         "rhb\r\n",
                         f"{channel}\r\n",
-                        f"{shutter_command}\r\n\r\n",
-                        "rhe\r\n\r\n",
+                        f"{shutter_command}\r\n",
+                        "\r\n",
+                        "rhe\r\n",
+                        "\r\n",
                     ]
                 )
 
@@ -125,73 +155,146 @@ class HeytechApiClient:
     async def add_shutter_command(self, action: str, channels: list[int]) -> None:
         """Add commands to the queue and process them."""
         commands = self._generate_shutter_command(action, channels)
-        _LOGGER.debug("Adding command to queue: %s", commands)
+        _LOGGER.debug("Adding commands to queue: %s", commands)
         for command in commands:
             await self.command_queue.put(command)
-        await self.connect()
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
 
     async def async_test_connection(self) -> None:
         """Test connection to the API."""
-        await self.add_shutter_command("sti", [])
-
-    async def async_get_data(self) -> dict[Any, dict[str, int]]:
-        """Send 'smn' command to fetch shutters data."""
         try:
+            await self.connect()
+            # Send a simple command to test the connection
+            await self.add_shutter_command("sti", [])
+            _LOGGER.debug("Connection test command sent successfully")
+        except Exception as exc:
+            raise IntegrationHeytechApiClientCommunicationError from exc
+
+    async def async_get_data(self) -> Dict[Any, Dict[str, int]]:
+        """Send 'smc' and 'smn' commands to fetch shutters data."""
+        try:
+            self.shutters = {}
+            self.max_channels = None
             await self.add_shutter_command("smc", [])
             await self.add_shutter_command("smn", [])
 
             max_wait = 50
             while not self.max_channels and max_wait > 0:
                 await asyncio.sleep(0.1)
+                max_wait -= 1
 
             max_wait = 50
-            while len(self.shutters) < self.max_channels and max_wait > 0:
+            while len(self.shutters) < (self.max_channels or 0) and max_wait > 0:
                 await asyncio.sleep(0.1)
+                max_wait -= 1
+
+            if not self.shutters:
+                raise IntegrationHeytechApiClientCommunicationError(
+                    "Failed to retrieve shutters data"
+                )
+
             return self.shutters
-        except IntegrationHeytechApiClientCommunicationError as exc:
+        except Exception as exc:
             _LOGGER.error("Failed to get data from Heytech API: %s", exc)
+            raise IntegrationHeytechApiClientCommunicationError from exc
 
-    async def async_get_shutter_positions(self) -> dict[int, int]:
+    async def async_get_shutter_positions(self) -> Dict[int, int]:
         """Send 'sop' command and parse the shutter positions."""
-        self.shutter_positions = {}
-        await self.add_shutter_command("sop", [])
-        # wait for the sop command to be processed
-        max_wait = 50
-        while not self.shutter_positions and max_wait > 0:
-            await asyncio.sleep(0.1)
-            max_wait -= 1
+        try:
+            self.shutter_positions = {}
+            await self.add_shutter_command("sop", [])
+            # Wait for the 'sop' command to be processed
+            max_wait = 50
+            while not self.shutter_positions and max_wait > 0:
+                await asyncio.sleep(0.1)
+                max_wait -= 1
 
-        _LOGGER.debug("Returning shutter positions: %s", self.shutter_positions)
-        return self.shutter_positions
+            if not self.shutter_positions:
+                raise IntegrationHeytechApiClientCommunicationError(
+                    "Failed to retrieve shutter positions"
+                )
+
+            _LOGGER.debug("Returning shutter positions: %s", self.shutter_positions)
+            return self.shutter_positions
+        except Exception as exc:
+            _LOGGER.error("Failed to get shutter positions: %s", exc)
+            raise IntegrationHeytechApiClientCommunicationError from exc
 
     async def _process_commands(self):
         while not self.command_queue.empty():
             command = await self.command_queue.get()
-            self.writer.write(command)
-            await self.writer.drain()
-            self.last_activity = asyncio.get_event_loop().time()
-            await asyncio.sleep(COMMAND_DELAY)
+            retries = 0
+            while retries < MAX_RETRIES:
+                if not self.connected:
+                    try:
+                        await self.connect()
+                    except IntegrationHeytechApiClientCommunicationError:
+                        retries += 1
+                        _LOGGER.error(f"Retrying to connect ({retries}/{MAX_RETRIES})")
+                        await asyncio.sleep(RETRY_DELAY)
+                        continue
+                try:
+                    if self.writer:
+                        _LOGGER.debug("Sending command: %s", command.strip())
+                        self.writer.write(command.encode("utf-8"))
+                        await self.writer.drain()
+                        self.last_activity = asyncio.get_event_loop().time()
+                        await asyncio.sleep(COMMAND_DELAY)
+                        break  # Command sent successfully, break out of retry loop
+                    else:
+                        _LOGGER.error("Writer is not available. Cannot send command.")
+                        raise IntegrationHeytechApiClientCommunicationError("Writer is not available")
+                except (ConnectionResetError, BrokenPipeError, IntegrationHeytechApiClientCommunicationError) as e:
+                    retries += 1
+                    _LOGGER.error(f"Error sending command: {e}. Retry {retries}/{MAX_RETRIES}")
+                    await self.disconnect()
+                    await asyncio.sleep(RETRY_DELAY)
+                except Exception as e:
+                    _LOGGER.error(f"Unexpected error sending command: {e}")
+                    await self.disconnect()
+                    raise
+            else:
+                _LOGGER.error(f"Failed to send command after {MAX_RETRIES} retries.")
+                # Decide whether to continue or raise an exception
+                # For now, we continue to the next command
+                continue
         self.connection_task = None
 
     async def _read_output(self):
-        while self.connected:
+        while self.connected and self.reader:
             try:
-                line = await self.reader.readline()
-                if line == "":
+                line_bytes = await self.reader.readline()
+                if line_bytes == b"":  # EOF
+                    _LOGGER.debug("EOF received from device")
+                    # Connection may have been closed by the device
+                    await self.disconnect()
                     break
+                line = line_bytes.decode("utf-8").strip()
+                _LOGGER.debug("Received line: %s", line)
                 if START_SOP in line and END_SOP in line:
                     self.shutter_positions = parse_shutter_positions(line)
                 elif START_SMN in line and END_SMN in line:
                     one_shutter = parse_smn_output(line)
-                    self.shutters = self.shutters | one_shutter
+                    self.shutters = {**self.shutters, **one_shutter}
                 elif START_SMC in line and END_SMC in line:
                     self.max_channels = parse_smc_output(line)
             except asyncio.CancelledError:
+                _LOGGER.debug("Read task cancelled")
                 break
+            except (ConnectionResetError, asyncio.IncompleteReadError) as e:
+                _LOGGER.error(f"Connection lost during reading: {e}")
+                await self.disconnect()
+                # Optionally attempt to reconnect
+                await asyncio.sleep(RETRY_DELAY)
+                try:
+                    await self.connect()
+                except IntegrationHeytechApiClientCommunicationError:
+                    _LOGGER.error("Failed to reconnect during reading")
+                    break
             except Exception as e:
                 _LOGGER.error(f"Read error: {e}")
+                await self.disconnect()
                 break
 
     async def _idle_checker(self):
@@ -199,41 +302,56 @@ class HeytechApiClient:
             await asyncio.sleep(1)
             current_time = asyncio.get_event_loop().time()
             if (
-                current_time - self.last_activity > self.idle_timeout
-                and self.command_queue.empty()
+                    current_time - self.last_activity > self.idle_timeout
+                    and self.command_queue.empty()
             ):
+                _LOGGER.debug("Idle timeout reached, disconnecting")
                 await self.disconnect()
 
     async def stop(self):
         """Gracefully stop the API client."""
         if self.connection_task and not self.connection_task.done():
             self.connection_task.cancel()
+            self.connection_task = None
         await self.disconnect()
 
 
-# Usage example
+# Usage example (for testing purposes)
 async def main():
     logging.basicConfig(level=logging.DEBUG)
     # Replace 'your_device_ip' with the actual IP address of your Heytech device
-    client = HeytechTelnetClient("10.0.1.6")
+    client = HeytechApiClient("10.0.1.6", pin="your_pin")
 
-    # Send commands
-    # await client.send_command('smn\r\n')
-    # await client.send_command('sop')
-    positions = await client.async_get_shutter_positions()
-    _LOGGER.info("positions %s", positions)
+    try:
+        # Test connection
+        await client.async_test_connection()
 
-    shutters = await client.async_get_data()
-    _LOGGER.info("shutters %s", shutters)
-    # Process output
-    # async for output_line in client.get_output():
-    #     _LOGGER.info(f"Received: {output_line}")
+        # Get shutter positions
+        positions = await client.async_get_shutter_positions()
+        _LOGGER.info("Shutter positions: %s", positions)
 
-    # Wait for a while to allow for idle timeout
-    await asyncio.sleep(15)
+        # Get shutters data
+        shutters = await client.async_get_data()
+        _LOGGER.info("Shutters data: %s", shutters)
 
-    # Close the client explicitly if needed
-    await client.stop()
+        # Example: Open shutters on channels 3 and 5
+        await client.add_shutter_command("100", [3, 4])
+
+        # Wait for commands to be processed
+        await asyncio.sleep(2)
+
+        # Simulate idle timeout by waiting longer than idle_timeout
+        await asyncio.sleep(client.idle_timeout + 5)
+
+        # After idle timeout, add another command to test reconnection
+        await client.add_shutter_command("up", [3, 4])
+
+        # Wait for commands to be processed
+        await asyncio.sleep(2)
+
+    finally:
+        # Close the client explicitly if needed
+        await client.stop()
 
 
 if __name__ == "__main__":

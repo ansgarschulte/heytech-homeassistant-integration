@@ -12,12 +12,10 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.loader import async_get_loaded_integration
 
 from .api import HeytechApiClient
 from .const import CONF_PIN, DOMAIN
 from .coordinator import HeytechDataUpdateCoordinator
-from .data import IntegrationHeytechData
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -28,8 +26,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
 ) -> bool:
     """Set up Heytech from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -47,10 +45,7 @@ async def async_setup_entry(
     if api_client:
         # Check if connection parameters have changed
         _LOGGER.debug("ToDo: Checking if connection parameters have changed.")
-        # if api_client.host != host or api_client.port != port or api_client.pin != pin:
-        #     _LOGGER.debug("Connection parameters changed, updating Heytech API client.")
-        #     # Update the existing api_client with new parameters
-        #     api_client.update_connection_params(host=host, port=port, pin=pin)
+        # Implement logic to update the API client if needed
     else:
         _LOGGER.debug("Creating Heytech API client.")
         api_client = HeytechApiClient(host=host, port=port, pin=pin)
@@ -95,20 +90,30 @@ async def async_setup_entry(
 
 
 async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
 ) -> None:
     """Reload config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        # Retrieve the API client
+        api_client = hass.data[DOMAIN][entry.entry_id].get("api_client")
+        if api_client:
+            try:
+                await api_client.stop()
+                _LOGGER.debug("API client stopped successfully.")
+            except Exception as e:
+                _LOGGER.error(f"Error stopping API client: {e}")
+
+        # Remove the entry from hass.data
         hass.data[DOMAIN].pop(entry.entry_id)
 
         _LOGGER.info(

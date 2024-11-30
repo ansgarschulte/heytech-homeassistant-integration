@@ -2,4 +2,3 @@ colorlog==6.9.0
 homeassistant==2024.6.0
 pip>=21.3.1
 ruff==0.8.0
-telnetlib3==2.0.4
