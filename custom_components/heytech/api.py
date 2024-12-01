@@ -7,7 +7,7 @@ This module provides an API client for interacting with Heytech devices without 
 import asyncio
 import logging
 from asyncio import Queue
-from typing import Any, Dict, Optional
+from typing import Any
 
 from custom_components.heytech.parse_helper import (
     END_SMC,
@@ -50,15 +50,15 @@ class HeytechApiClient:
         self.idle_timeout = idle_timeout
         self.command_queue: Queue[str] = Queue()
         self.connected = False
-        self.reader: Optional[asyncio.StreamReader] = None
-        self.writer: Optional[asyncio.StreamWriter] = None
+        self.reader: asyncio.StreamReader | None = None
+        self.writer: asyncio.StreamWriter | None = None
         self.last_activity: float = 0.0
-        self.connection_task: Optional[asyncio.Task] = None
-        self.read_task: Optional[asyncio.Task] = None
-        self.idle_task: Optional[asyncio.Task] = None
-        self.max_channels: Optional[int] = None
-        self.shutter_positions: Dict[int, int] = {}
-        self.shutters: Dict[Any, Dict[str, int]] = {}
+        self.connection_task: asyncio.Task | None = None
+        self.read_task: asyncio.Task | None = None
+        self.idle_task: asyncio.Task | None = None
+        self.max_channels: int | None = None
+        self.shutter_positions: dict[int, int] = {}
+        self.shutters: dict[Any, dict[str, int]] = {}
         self._reconnecting = False
 
     async def connect(self):
@@ -73,14 +73,20 @@ class HeytechApiClient:
                 self.last_activity = asyncio.get_event_loop().time()
                 self.read_task = asyncio.create_task(self._read_output())
                 self.idle_task = asyncio.create_task(self._idle_checker())
-                _LOGGER.debug("Connected to Heytech device at %s:%s", self.host, self.port)
+                _LOGGER.debug(
+                    "Connected to Heytech device at %s:%s", self.host, self.port
+                )
             except Exception as e:
                 retries += 1
                 _LOGGER.error(f"Connection error: {e}. Retry {retries}/{MAX_RETRIES}")
                 await asyncio.sleep(RETRY_DELAY)
         if not self.connected:
-            _LOGGER.error(f"Failed to connect to Heytech device after {MAX_RETRIES} retries.")
-            raise IntegrationHeytechApiClientCommunicationError("Failed to connect to Heytech device")
+            _LOGGER.error(
+                f"Failed to connect to Heytech device after {MAX_RETRIES} retries."
+            )
+            raise IntegrationHeytechApiClientCommunicationError(
+                "Failed to connect to Heytech device"
+            )
 
     async def disconnect(self):
         if self.connected:
@@ -171,7 +177,7 @@ class HeytechApiClient:
         except Exception as exc:
             raise IntegrationHeytechApiClientCommunicationError from exc
 
-    async def async_get_data(self) -> Dict[Any, Dict[str, int]]:
+    async def async_get_data(self) -> dict[Any, dict[str, int]]:
         """Send 'smc' and 'smn' commands to fetch shutters data."""
         try:
             self.shutters = {}
@@ -199,7 +205,7 @@ class HeytechApiClient:
             _LOGGER.error("Failed to get data from Heytech API: %s", exc)
             raise IntegrationHeytechApiClientCommunicationError from exc
 
-    async def async_get_shutter_positions(self) -> Dict[int, int]:
+    async def async_get_shutter_positions(self) -> dict[int, int]:
         """Send 'sop' command and parse the shutter positions."""
         try:
             self.shutter_positions = {}
@@ -237,17 +243,24 @@ class HeytechApiClient:
                 try:
                     if self.writer:
                         _LOGGER.debug("Sending command: %s", command.strip())
-                        self.writer.write(command.encode("utf-8"))
+                        self.writer.write(command.encode("ascii"))
                         await self.writer.drain()
                         self.last_activity = asyncio.get_event_loop().time()
                         await asyncio.sleep(COMMAND_DELAY)
                         break  # Command sent successfully, break out of retry loop
-                    else:
-                        _LOGGER.error("Writer is not available. Cannot send command.")
-                        raise IntegrationHeytechApiClientCommunicationError("Writer is not available")
-                except (ConnectionResetError, BrokenPipeError, IntegrationHeytechApiClientCommunicationError) as e:
+                    _LOGGER.error("Writer is not available. Cannot send command.")
+                    raise IntegrationHeytechApiClientCommunicationError(
+                        "Writer is not available"
+                    )
+                except (
+                    ConnectionResetError,
+                    BrokenPipeError,
+                    IntegrationHeytechApiClientCommunicationError,
+                ) as e:
                     retries += 1
-                    _LOGGER.error(f"Error sending command: {e}. Retry {retries}/{MAX_RETRIES}")
+                    _LOGGER.error(
+                        f"Error sending command: {e}. Retry {retries}/{MAX_RETRIES}"
+                    )
                     await self.disconnect()
                     await asyncio.sleep(RETRY_DELAY)
                 except Exception as e:
@@ -270,7 +283,7 @@ class HeytechApiClient:
                     # Connection may have been closed by the device
                     await self.disconnect()
                     break
-                line = line_bytes.decode("utf-8").strip()
+                line = line_bytes.decode("ascii").strip()
                 _LOGGER.debug("Received line: %s", line)
                 if START_SOP in line and END_SOP in line:
                     self.shutter_positions = parse_shutter_positions(line)
@@ -302,8 +315,8 @@ class HeytechApiClient:
             await asyncio.sleep(1)
             current_time = asyncio.get_event_loop().time()
             if (
-                    current_time - self.last_activity > self.idle_timeout
-                    and self.command_queue.empty()
+                current_time - self.last_activity > self.idle_timeout
+                and self.command_queue.empty()
             ):
                 _LOGGER.debug("Idle timeout reached, disconnecting")
                 await self.disconnect()
