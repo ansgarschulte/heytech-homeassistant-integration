@@ -125,6 +125,13 @@ class HeytechApiClient:
 
         if action in command_map:
             shutter_command = command_map[action]
+        elif action.isdigit():
+            if int(action)  == 0:
+                shutter_command = "down"
+            elif int(action) == 100:
+                shutter_command = "up"
+            else:
+                shutter_command = action
         else:
             shutter_command = action
 
