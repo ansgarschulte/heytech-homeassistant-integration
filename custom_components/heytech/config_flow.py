@@ -162,8 +162,8 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                 title=self._host or "Heytech",
                 data={
                     CONF_HOST: self._host,
-                    CONF_PORT: self._port,
-                    CONF_PIN: int(self._pin),
+                    CONF_PORT: int(self._port),
+                    CONF_PIN: self._pin,
                     CONF_MAX_AUTO_SHUTTERS: self._max_auto_shutters,
                     CONF_SHUTTERS: self._shutters,
                 },

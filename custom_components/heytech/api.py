@@ -283,7 +283,8 @@ class HeytechApiClient:
                     # Connection may have been closed by the device
                     await self.disconnect()
                     break
-                line = line_bytes.decode("ascii").strip()
+                # Decode the line using latin-1
+                line = line_bytes.decode('latin-1', errors='replace').strip()
                 _LOGGER.debug("Received line: %s", line)
                 if START_SOP in line and END_SOP in line:
                     self.shutter_positions = parse_shutter_positions(line)
@@ -294,6 +295,7 @@ class HeytechApiClient:
                     self.max_channels = parse_smc_output(line)
             except asyncio.CancelledError:
                 _LOGGER.debug("Read task cancelled")
+                await self.disconnect()
                 break
             except (ConnectionResetError, asyncio.IncompleteReadError) as e:
                 _LOGGER.error(f"Connection lost during reading: {e}")
