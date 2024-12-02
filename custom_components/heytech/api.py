@@ -48,7 +48,7 @@ class HeytechApiClient:
         self.host = host
         self.port = int(port)
         self.idle_timeout = idle_timeout
-        self.command_queue: Queue[str] = Queue()
+        self.command_queue: Queue[list[str]] = Queue()
         self.connected = False
         self.reader: asyncio.StreamReader | None = None
         self.writer: asyncio.StreamWriter | None = None
@@ -162,8 +162,7 @@ class HeytechApiClient:
         """Add commands to the queue and process them."""
         commands = self._generate_shutter_command(action, channels)
         _LOGGER.debug("Adding commands to queue: %s", commands)
-        for command in commands:
-            await self.command_queue.put(command)
+        await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
 
@@ -229,7 +228,7 @@ class HeytechApiClient:
 
     async def _process_commands(self):
         while not self.command_queue.empty():
-            command = await self.command_queue.get()
+            commands = await self.command_queue.get()
             retries = 0
             while retries < MAX_RETRIES:
                 if not self.connected:
@@ -242,12 +241,13 @@ class HeytechApiClient:
                         continue
                 try:
                     if self.writer:
-                        _LOGGER.debug("Sending command: %s", command.strip())
-                        self.writer.write(command.encode("ascii"))
-                        await self.writer.drain()
-                        self.last_activity = asyncio.get_event_loop().time()
-                        await asyncio.sleep(COMMAND_DELAY)
+                        for command in commands:
+                            _LOGGER.debug("Sending command: %s", command.strip())
+                            self.writer.write(command.encode("ascii"))
+                            await self.writer.drain()
+                            self.last_activity = asyncio.get_event_loop().time()
                         break  # Command sent successfully, break out of retry loop
+                        await asyncio.sleep(COMMAND_DELAY)
                     _LOGGER.error("Writer is not available. Cannot send command.")
                     raise IntegrationHeytechApiClientCommunicationError(
                         "Writer is not available"
