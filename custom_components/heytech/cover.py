@@ -4,7 +4,7 @@ Heytech Cover Integration for Home Assistant.
 This module provides support for Heytech covers within Home Assistant,
 allowing users to control their Heytech shutters via the Home Assistant interface.
 """
-
+import asyncio
 import logging
 from typing import Any
 
@@ -174,7 +174,10 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         self._channels = channels
         self._attr_name = name
         self._attr_unique_id = unique_id
+        self._prev_position: int | None = None  # Current position
         self._position: int | None = None  # Current position
+        self._is_opening: bool = False
+        self._is_closing: bool = False
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -185,6 +188,16 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             "manufacturer": "Heytech",
             "model": "Shutter",
         }
+
+    @property
+    def is_opening(self) -> bool:
+        """Return whether the cover is opening or not."""
+        return self._is_opening
+
+    @property
+    def is_closing(self) -> bool:
+        """Return whether the cover is closing or not."""
+        return self._is_closing
 
     @property
     def is_closed(self) -> bool:
@@ -205,11 +218,23 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         """Open the cover."""
         _LOGGER.info("Opening %s on channels %s", self._name, self._channels)
         await self.async_set_cover_position(position=MAX_POSITION)
+        self._is_opening = True
+        self.async_write_ha_state()
 
     async def async_close_cover(self, **_kwargs: Any) -> None:
         """Close the cover."""
         _LOGGER.info("Closing %s on channels %s", self._name, self._channels)
         await self.async_set_cover_position(position=MIN_POSITION)
+        self._is_closing = True
+        self.async_write_ha_state()
+
+    async def _force_position_refresh_later(self) -> None:
+        for i in range(20):
+            await asyncio.sleep(1)
+            await self.coordinator.async_refresh()
+        self._is_opening = False
+        self._is_closing = False
+        self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover to a specific position."""
@@ -220,22 +245,41 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         _LOGGER.info("Setting position of %s to %s%%", self._name, position)
         try:
             await self._api_client.add_shutter_command(f"{position}", self._channels)
+            if self._position is not None:
+                if position == self._position:
+                    self._is_opening = False
+                    self._is_closing = False
+                elif position > self._position:
+                    self._is_opening = True
+                    self._is_closing = False
+                elif position < self._position:
+                    self._is_opening = False
+                    self._is_closing = True
+            self._prev_position = self._position
             self._position = position
+            self.async_write_ha_state()
+            await self.coordinator.async_request_refresh()
+            self.hass.async_create_task(self._force_position_refresh_later(), "force_position_refresh_later_for_" + self._name)
         except IntegrationHeytechApiClientError:
             _LOGGER.exception("Failed to set position for %s", self._name)
             return
         # The coordinator will update the position on next update
+
 
     async def async_stop_cover(self, **_kwargs: Any) -> None:
         """Stop the cover."""
         _LOGGER.info("Stopping %s on channels %s", self._name, self._channels)
         try:
             await self._api_client.add_shutter_command("stop", self._channels)
+            self._is_opening = False
+            self._is_closing = False
+            self.async_write_ha_state()
         except IntegrationHeytechApiClientError:
             _LOGGER.exception("Failed to stop %s", self._name)
 
     def _handle_coordinator_update(self) -> None:
         """Update the cover's state from the coordinator."""
+        self._prev_position = self._position
         positions = self.coordinator.data
         if not self._channels:
             self._position = None
@@ -252,6 +296,14 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
                 self._position = sum(channel_positions) // len(channel_positions)
             else:
                 self._position = None
+
+        if self._position is not None and self._prev_position is not None:
+            if self._position == self._prev_position:
+                self._is_opening = False
+                self._is_closing = False
+        else:
+            self._is_opening = False
+            self._is_closing = False
         self.async_write_ha_state()
 
 
