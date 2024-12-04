@@ -102,6 +102,7 @@ async def async_setup_entry(
 
     # Remove entities and devices that are no longer in the configuration
     await _async_cleanup_entities_and_devices(hass, entry, current_unique_ids)
+    await coordinator.async_refresh()
 
 
 async def _async_cleanup_entities_and_devices(
@@ -247,10 +248,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         try:
             await self._api_client.add_shutter_command(f"{position}", self._channels)
             if self._position is not None:
-                if position == self._position:
-                    self._is_opening = False
-                    self._is_closing = False
-                elif position > self._position:
+                if position > self._position:
                     self._is_opening = True
                     self._is_closing = False
                 elif position < self._position:
