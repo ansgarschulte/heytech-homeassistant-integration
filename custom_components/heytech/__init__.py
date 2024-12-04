@@ -110,8 +110,8 @@ async def async_unload_entry(
             try:
                 await api_client.stop()
                 _LOGGER.debug("API client stopped successfully.")
-            except Exception as e:
-                _LOGGER.error(f"Error stopping API client: {e}")
+            except Exception:
+                _LOGGER.exception("Error stopping API client")
 
         # Remove the entry from hass.data
         hass.data[DOMAIN].pop(entry.entry_id)

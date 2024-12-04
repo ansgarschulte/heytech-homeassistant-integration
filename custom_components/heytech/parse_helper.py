@@ -1,3 +1,5 @@
+"""Helper Functions for parsing Heytech responses."""
+
 import logging
 import re
 from typing import Any
@@ -17,8 +19,7 @@ END_SMC = "ende_smc"
 
 
 def parse_shutter_positions(line: str) -> dict[int, int]:
-    # Handle responses with and without 'start_sop'
-
+    """Handle responses with and without 'start_sop'."""
     if START_SOP in line and END_SOP in line:
         # Extract positions between 'start_sop' and 'ende_sop'
         start_index = line.find(START_SOP) + len(START_SOP)

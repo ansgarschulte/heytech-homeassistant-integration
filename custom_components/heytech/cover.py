@@ -4,6 +4,7 @@ Heytech Cover Integration for Home Assistant.
 This module provides support for Heytech covers within Home Assistant,
 allowing users to control their Heytech shutters via the Home Assistant interface.
 """
+
 import asyncio
 import logging
 from typing import Any
@@ -229,7 +230,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         self.async_write_ha_state()
 
     async def _force_position_refresh_later(self) -> None:
-        for i in range(20):
+        for _i in range(20):
             await asyncio.sleep(1)
             await self.coordinator.async_refresh()
         self._is_opening = False
@@ -259,12 +260,14 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             self._position = position
             self.async_write_ha_state()
             await self.coordinator.async_request_refresh()
-            self.hass.async_create_task(self._force_position_refresh_later(), "force_position_refresh_later_for_" + self._name)
+            self.hass.async_create_task(
+                self._force_position_refresh_later(),
+                "force_position_refresh_later_for_" + self._name,
+            )
         except IntegrationHeytechApiClientError:
             _LOGGER.exception("Failed to set position for %s", self._name)
             return
         # The coordinator will update the position on next update
-
 
     async def async_stop_cover(self, **_kwargs: Any) -> None:
         """Stop the cover."""
