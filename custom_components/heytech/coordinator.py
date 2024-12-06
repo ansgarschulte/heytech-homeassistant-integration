@@ -27,25 +27,33 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             logger=LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=60),  # Adjust as needed
+            always_update=False,
         )
         self.api_client = api_client
         self.shutter_positions: dict[int, int] = {}
+        self.climate_data: dict[str, str] = {}
 
-    async def _async_update_data(self) -> dict[int, int]:
+    async def _async_update_data(self) -> dict[str, dict[any, any]]:
         """Fetch data from the Heytech API."""
         try:
+            result = {}
             positions = await self.api_client.async_get_shutter_positions()
-            if not positions:
-                await self._handle_no_positions()
-            else:
+            climate_data = await self.api_client.async_get_climate_data()
+            if not positions and not climate_data:
+                await self._handle_no_data()
+            if climate_data:
+                self.climate_data = climate_data
+                result["climate_data"] = climate_data
+            if positions:
                 self.shutter_positions = positions
-                return positions
+                result["shutter_positions"] = positions
+            return result
         except Exception as exception:
             error_message = f"Error fetching shutter positions: {exception}"
             LOGGER.error(error_message)
             raise UpdateFailed(error_message) from exception
 
-    async def _handle_no_positions(self) -> None:
+    async def _handle_no_data(self) -> None:
         """Handle the case when no shutter positions are received."""
-        error_message = "Failed to retrieve shutter positions."
+        error_message = "Failed to retrieve shutter positions and climate data."
         raise UpdateFailed(error_message)

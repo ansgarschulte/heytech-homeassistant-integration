@@ -17,9 +17,9 @@ from custom_components.heytech.parse_helper import (
     START_SMC,
     START_SMN,
     START_SOP,
-    parse_shutter_positions,
-    parse_smc_output,
-    parse_smn_output,
+    parse_sop_shutter_positions,
+    parse_smc_max_channel_output,
+    parse_smn_motor_names_output, parse_skd_climate_data, END_SKD, START_SKD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class HeytechApiClient:
     """Client for interacting with Heytech devices."""
 
     def __init__(
-        self, host: str, port: int = 1002, pin: str = "", idle_timeout: int = 10
+            self, host: str, port: int = 1002, pin: str = "", idle_timeout: int = 10
     ) -> None:
         """
         Initialize the API client.
@@ -74,6 +74,7 @@ class HeytechApiClient:
         self.max_channels: int | None = None
         self.shutter_positions: dict[int, int] = {}
         self.shutters: dict[Any, dict[str, int]] = {}
+        self.climate_data: dict[str, str] = {}
         self._reconnecting = False
 
     async def connect(self) -> None:
@@ -179,7 +180,7 @@ class HeytechApiClient:
 
         return commands
 
-    async def add_shutter_command(self, action: str, channels: list[int]) -> None:
+    async def add_command(self, action: str, channels: list[int]) -> None:
         """Add commands to the queue and process them."""
         commands = self._generate_shutter_command(action, channels)
         _LOGGER.debug("Adding commands to queue: %s", commands)
@@ -191,7 +192,7 @@ class HeytechApiClient:
         """Test connection to the API."""
         try:
             await self.connect()
-            await self.add_shutter_command("sti", [])
+            await self.add_command("sti", [])
             _LOGGER.debug("Connection test command sent successfully")
         except Exception as exc:
             _LOGGER.exception("Test connection failed")
@@ -202,8 +203,8 @@ class HeytechApiClient:
         try:
             self.shutters = {}
             self.max_channels = None
-            await self.add_shutter_command("smc", [])
-            await self.add_shutter_command("smn", [])
+            await self.add_command("smc", [])
+            await self.add_command("smn", [])
 
             max_wait = 50
             while not self.max_channels and max_wait > 0:
@@ -227,7 +228,7 @@ class HeytechApiClient:
         """Send 'sop' command and parse the shutter positions."""
         try:
             self.shutter_positions = {}
-            await self.add_shutter_command("sop", [])
+            await self.add_command("sop", [])
             max_wait = 50
             while not self.shutter_positions and max_wait > 0:
                 await asyncio.sleep(0.1)
@@ -242,6 +243,26 @@ class HeytechApiClient:
             raise IntegrationHeytechApiClientCommunicationError from exc
         else:
             return self.shutter_positions
+
+    async def async_get_climate_data(self) -> dict[str, str]:
+        """Send 'skd' command and parse the climate data."""
+        try:
+            self.climate_data = {}
+            await self.add_command("skd", [])
+            max_wait = 50
+            while not self.climate_data and max_wait > 0:
+                await asyncio.sleep(0.1)
+                max_wait -= 1
+
+            if not self.climate_data:
+                self._raise_communication_error("Failed to retrieve climate data")
+
+            _LOGGER.debug("Returning climate data: %s", self.climate_data)
+        except Exception as exc:
+            _LOGGER.exception("Failed to get climate data")
+            raise IntegrationHeytechApiClientCommunicationError from exc
+        else:
+            return self.climate_data
 
     def _raise_communication_error(self, message: str) -> None:
         """Raise a communication error with the given message."""
@@ -275,9 +296,9 @@ class HeytechApiClient:
                     _LOGGER.error("Writer is not available. Cannot send command.")
                     self._raise_communication_error("Writer is not available")
                 except (
-                    ConnectionResetError,
-                    BrokenPipeError,
-                    IntegrationHeytechApiClientCommunicationError,
+                        ConnectionResetError,
+                        BrokenPipeError,
+                        IntegrationHeytechApiClientCommunicationError,
                 ):
                     retries += 1
                     _LOGGER.exception(
@@ -305,12 +326,14 @@ class HeytechApiClient:
                 line = line_bytes.decode("latin-1", errors="replace").strip()
                 _LOGGER.debug("Received line: %s", line)
                 if START_SOP in line and END_SOP in line:
-                    self.shutter_positions = parse_shutter_positions(line)
+                    self.shutter_positions = parse_sop_shutter_positions(line)
                 elif START_SMN in line and END_SMN in line:
-                    one_shutter = parse_smn_output(line)
+                    one_shutter = parse_smn_motor_names_output(line)
                     self.shutters = {**self.shutters, **one_shutter}
                 elif START_SMC in line and END_SMC in line:
-                    self.max_channels = parse_smc_output(line)
+                    self.max_channels = parse_smc_max_channel_output(line)
+                elif START_SKD in line and END_SKD in line:
+                    self.climate_data = parse_skd_climate_data(line)
             except asyncio.CancelledError:
                 _LOGGER.debug("Read task cancelled")
                 await self.disconnect()
@@ -335,8 +358,8 @@ class HeytechApiClient:
             await asyncio.sleep(1)
             current_time = asyncio.get_event_loop().time()
             if (
-                current_time - self.last_activity > self.idle_timeout
-                and self.command_queue.empty()
+                    current_time - self.last_activity > self.idle_timeout
+                    and self.command_queue.empty()
             ):
                 _LOGGER.debug("Idle timeout reached, disconnecting")
                 await self.disconnect()
@@ -360,19 +383,21 @@ async def main() -> None:
 
         positions = await client.async_get_shutter_positions()
         _LOGGER.info("Shutter positions: %s", positions)
+        climate_date = await client.async_get_climate_data()
+        _LOGGER.info("Climate data: %s", climate_date)
 
-        shutters = await client.async_get_data()
-        _LOGGER.info("Shutters data: %s", shutters)
-
-        await client.add_shutter_command("100", [3, 4])
-
-        await asyncio.sleep(2)
-
-        await asyncio.sleep(client.idle_timeout + 5)
-
-        await client.add_shutter_command("up", [3, 4])
-
-        await asyncio.sleep(2)
+        # shutters = await client.async_get_data()
+        # _LOGGER.info("Shutters data: %s", shutters)
+        #
+        # await client.add_shutter_command("100", [3, 4])
+        #
+        # await asyncio.sleep(2)
+        #
+        # await asyncio.sleep(client.idle_timeout + 5)
+        #
+        # await client.add_shutter_command("up", [3, 4])
+        #
+        # await asyncio.sleep(2)
     finally:
         await client.stop()
 

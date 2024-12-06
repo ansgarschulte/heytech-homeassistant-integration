@@ -281,7 +281,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
     def _handle_coordinator_update(self) -> None:
         """Update the cover's state from the coordinator."""
         self._prev_position = self._position
-        positions = self.coordinator.data
+        positions = self.coordinator.data.get("shutter_positions", {})
         if not self._channels:
             self._position = None
         else:
