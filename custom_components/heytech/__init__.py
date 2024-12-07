@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-PLATFORMS: list[Platform] = [Platform.COVER]
+PLATFORMS: list[Platform] = [Platform.COVER, Platform.SENSOR]
 _LOGGER = logging.getLogger(__name__)
 
 

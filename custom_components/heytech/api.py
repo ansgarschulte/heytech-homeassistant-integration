@@ -74,7 +74,7 @@ class HeytechApiClient:
         self.max_channels: int | None = None
         self.shutter_positions: dict[int, int] = {}
         self.shutters: dict[Any, dict[str, int]] = {}
-        self.climate_data: dict[str, str] = {}
+        self.climate_data: dict[str, float] = {}
         self._reconnecting = False
 
     async def connect(self) -> None:

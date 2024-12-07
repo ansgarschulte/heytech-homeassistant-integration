@@ -12,7 +12,6 @@ from .const import DOMAIN, LOGGER
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the Heytech API."""
 

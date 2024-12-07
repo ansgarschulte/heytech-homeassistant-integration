@@ -67,7 +67,7 @@ def parse_sop_shutter_positions(line: str) -> dict[int, int]:
             positions[idx] = 0  # Default to 0% if invalid
     return positions
 
-def parse_skd_climate_data(line: str) -> dict[str, str]:
+def parse_skd_climate_data(line: str) -> dict[str, float]:
     """Get Climate data from the 'skd' command."""
     # Example response: 'start_skd0,999,999,999,999,999,999,999,999,0,0,0,0,1,0,0,ende_skd'
     if START_SKD in line and END_SKD in line:
@@ -77,52 +77,25 @@ def parse_skd_climate_data(line: str) -> dict[str, str]:
         data_str = line[start_index:end_index]
 
         data_list = data_str.split(",")
-        climate_data = {}
-        for idx, data in enumerate(data_list, start=1):
-            if idx > MAX_CHANNELS:
-                break  # Stop processing further channels
+        climate_data: dict[str, float] = {}
+        data_list = [data.strip() for data in data_list]  # Remove any leading/trailing whitespace
+        data_list = [data if data != "999" else None for data in data_list]  # Replace '999' with None
+        data_list[16] = None  # Remove the last element 'ende_skd'
+        data_list = [float(data) if data is not None else data for data in data_list]  # Convert to float if not None
 
-            data = data.strip()  # Remove any leading/trailing whitespace
-
-            match idx:
-                case 1:
-                    climate_data["brightness"] = data
-                case 2:
-                    if data != "999":
-                        climate_data["indoor_temperature"] = data
-                case 3:
-                    if data != "999":
-                        climate_data["indoor_temperature_decimal_place"] = data
-                case 4:
-                    if data != "999":
-                        climate_data["indoor_temperature_min"] = data
-                case 5:
-                    if data != "999":
-                        climate_data["indoor_temperature_max"] = data
-                case 6:
-                    if data != "999":
-                        climate_data["outdoor_temperature"] = data
-                case 7:
-                    if data != "999":
-                        climate_data["outdoor_temperature_decimal_place"] = data
-                case 8:
-                    if data != "999":
-                        climate_data["outdoor_temperature_min"] = data
-                case 9:
-                    if data != "999":
-                        climate_data["outdoor_temperature_max"] = data
-                case 10:
-                    climate_data["current_wind_speed"] = data
-                case 11:
-                    climate_data["current_wind_speed_max"] = data
-                case 12:
-                    climate_data["alarm"] = data
-                case 13:
-                    climate_data["rain"] = data
-                case 15:
-                    climate_data["brightness_medium"] = data
-                case 16:
-                    climate_data["relative_humidity"] = data
+        climate_data["brightness"] = data_list[0]
+        climate_data["indoor temperature"] = float(f"{data_list[1]}.{data_list[2]}") if data_list[1] is not None and data_list[2] is not None else None
+        climate_data["indoor temperature min"] = data_list[3]
+        climate_data["indoor temperature max"] = data_list[4]
+        climate_data["outdoor temperature"] = float(f"{data_list[5]}.{data_list[6]}") if data_list[5] is not None and data_list[6] is not None else None
+        climate_data["outdoor temperature min"] = data_list[7]
+        climate_data["outdoor temperature max"] = data_list[8]
+        climate_data["current wind speed"] = data_list[9]
+        climate_data["current wind speed max"] = data_list[10]
+        climate_data["alarm"] = data_list[11]
+        climate_data["rain"] = data_list[12]
+        climate_data["brightness medium"] = data_list[14]
+        climate_data["relative humidity"] = data_list[15]
         return climate_data
     return {}
 
