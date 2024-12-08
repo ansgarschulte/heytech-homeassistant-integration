@@ -5,26 +5,26 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import TEMP_CELSIUS
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
-from .data import IntegrationHeytechConfigEntry
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN  # Make sure you have DOMAIN defined in const.py
+from .data import IntegrationHeytechConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-        hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """
     Set up sensors for the given config entry.
@@ -35,7 +35,9 @@ async def async_setup_entry(
         ...
     }
     """
-    coordinator: DataUpdateCoordinator[dict[str, dict[any, any]]] = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator: DataUpdateCoordinator[dict[str, dict[any, any]]] = hass.data[DOMAIN][
+        entry.entry_id
+    ]["coordinator"]
 
     # Create a sensor entity for each key in the coordinator data dict.
     keys = coordinator.data.get("climate_data", {}).keys()
@@ -46,17 +48,27 @@ async def async_setup_entry(
         unique_id = f"{entry.entry_id}_{name}"
         current_unique_ids.add(unique_id)
         if "brightness" in name:
-            entity = HeytechSensor(coordinator, name, unique_id, SensorDeviceClass.ILLUMINANCE, "lux")
+            entity = HeytechSensor(
+                coordinator, name, unique_id, SensorDeviceClass.ILLUMINANCE, "lux"
+            )
         elif "wind" in name:
-            entity = HeytechSensor(coordinator, name, unique_id, SensorDeviceClass.WIND_SPEED, "km/h")
-        elif "alarm" in name:
-            entity = HeytechBinarySensor(coordinator, name, unique_id)
-        elif "rain" in name:
+            entity = HeytechSensor(
+                coordinator, name, unique_id, SensorDeviceClass.WIND_SPEED, "km/h"
+            )
+        elif "alarm" in name or "rain" in name:
             entity = HeytechBinarySensor(coordinator, name, unique_id)
         elif "humidity" in name:
-            entity = HeytechSensor(coordinator, name, unique_id, SensorDeviceClass.HUMIDITY, "%")
+            entity = HeytechSensor(
+                coordinator, name, unique_id, SensorDeviceClass.HUMIDITY, "%"
+            )
         else:
-            entity = HeytechSensor(coordinator, name, unique_id, SensorDeviceClass.TEMPERATURE, TEMP_CELSIUS)
+            entity = HeytechSensor(
+                coordinator,
+                name,
+                unique_id,
+                SensorDeviceClass.TEMPERATURE,
+                TEMP_CELSIUS,
+            )
         entities.append(entity)
     async_add_entities(entities)
 
@@ -64,13 +76,21 @@ async def async_setup_entry(
     await _async_cleanup_entities_and_devices(hass, entry, current_unique_ids)
     await coordinator.async_refresh()
 
+
 class HeytechSensor(CoordinatorEntity, SensorEntity):
     """A sensor entity that represents the temperature for a given name from the coordinator data."""
 
     _attr_device_class = None
     _attr_native_unit_of_measurement = None
 
-    def __init__(self, coordinator: DataUpdateCoordinator, name: str, unique_id, sensor_class: SensorDeviceClass | None, unit: str | None) -> None:
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        name: str,
+        unique_id,
+        sensor_class: SensorDeviceClass | None,
+        unit: str | None,
+    ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)
         self._name = name
@@ -102,7 +122,9 @@ class HeytechSensor(CoordinatorEntity, SensorEntity):
 class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """A binary sensor entity that represents the alarm state for a given name from the coordinator data."""
 
-    def __init__(self, coordinator: DataUpdateCoordinator, name: str, unique_id) -> None:
+    def __init__(
+        self, coordinator: DataUpdateCoordinator, name: str, unique_id
+    ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)
         self._name = name
@@ -128,10 +150,11 @@ class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
         _LOGGER.debug("Binary sensor %s has value %s", self._name, value)
         return value == "1" if value is not None else False
 
+
 async def _async_cleanup_entities_and_devices(
-        hass: HomeAssistant,
-        entry: IntegrationHeytechConfigEntry,
-        current_unique_ids: set[str],
+    hass: HomeAssistant,
+    entry: IntegrationHeytechConfigEntry,
+    current_unique_ids: set[str],
 ) -> None:
     """Remove entities that are no longer in the configuration."""
     entity_registry = er.async_get(hass)

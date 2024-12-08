@@ -11,15 +11,18 @@ from asyncio import Queue
 from typing import Any
 
 from custom_components.heytech.parse_helper import (
+    END_SKD,
     END_SMC,
     END_SMN,
     END_SOP,
+    START_SKD,
     START_SMC,
     START_SMN,
     START_SOP,
-    parse_sop_shutter_positions,
+    parse_skd_climate_data,
     parse_smc_max_channel_output,
-    parse_smn_motor_names_output, parse_skd_climate_data, END_SKD, START_SKD,
+    parse_smn_motor_names_output,
+    parse_sop_shutter_positions,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +52,7 @@ class HeytechApiClient:
     """Client for interacting with Heytech devices."""
 
     def __init__(
-            self, host: str, port: int = 1002, pin: str = "", idle_timeout: int = 10
+        self, host: str, port: int = 1002, pin: str = "", idle_timeout: int = 10
     ) -> None:
         """
         Initialize the API client.
@@ -296,9 +299,9 @@ class HeytechApiClient:
                     _LOGGER.error("Writer is not available. Cannot send command.")
                     self._raise_communication_error("Writer is not available")
                 except (
-                        ConnectionResetError,
-                        BrokenPipeError,
-                        IntegrationHeytechApiClientCommunicationError,
+                    ConnectionResetError,
+                    BrokenPipeError,
+                    IntegrationHeytechApiClientCommunicationError,
                 ):
                     retries += 1
                     _LOGGER.exception(
@@ -358,8 +361,8 @@ class HeytechApiClient:
             await asyncio.sleep(1)
             current_time = asyncio.get_event_loop().time()
             if (
-                    current_time - self.last_activity > self.idle_timeout
-                    and self.command_queue.empty()
+                current_time - self.last_activity > self.idle_timeout
+                and self.command_queue.empty()
             ):
                 _LOGGER.debug("Idle timeout reached, disconnecting")
                 await self.disconnect()

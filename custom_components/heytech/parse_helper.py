@@ -67,6 +67,7 @@ def parse_sop_shutter_positions(line: str) -> dict[int, int]:
             positions[idx] = 0  # Default to 0% if invalid
     return positions
 
+
 def parse_skd_climate_data(line: str) -> dict[str, float]:
     """Get Climate data from the 'skd' command."""
     # Example response: 'start_skd0,999,999,999,999,999,999,999,999,0,0,0,0,1,0,0,ende_skd'
@@ -78,16 +79,30 @@ def parse_skd_climate_data(line: str) -> dict[str, float]:
 
         data_list = data_str.split(",")
         climate_data: dict[str, float] = {}
-        data_list = [data.strip() for data in data_list]  # Remove any leading/trailing whitespace
-        data_list = [data if data != "999" else None for data in data_list]  # Replace '999' with None
+        data_list = [
+            data.strip() for data in data_list
+        ]  # Remove any leading/trailing whitespace
+        data_list = [
+            data if data != "999" else None for data in data_list
+        ]  # Replace '999' with None
         data_list[16] = None  # Remove the last element 'ende_skd'
-        data_list = [float(data) if data is not None else data for data in data_list]  # Convert to float if not None
+        data_list = [
+            float(data) if data is not None else data for data in data_list
+        ]  # Convert to float if not None
 
         climate_data["brightness"] = data_list[0]
-        climate_data["indoor temperature"] = float(f"{data_list[1]}.{data_list[2]}") if data_list[1] is not None and data_list[2] is not None else None
+        climate_data["indoor temperature"] = (
+            float(f"{data_list[1]}.{data_list[2]}")
+            if data_list[1] is not None and data_list[2] is not None
+            else None
+        )
         climate_data["indoor temperature min"] = data_list[3]
         climate_data["indoor temperature max"] = data_list[4]
-        climate_data["outdoor temperature"] = float(f"{data_list[5]}.{data_list[6]}") if data_list[5] is not None and data_list[6] is not None else None
+        climate_data["outdoor temperature"] = (
+            float(f"{data_list[5]}.{data_list[6]}")
+            if data_list[5] is not None and data_list[6] is not None
+            else None
+        )
         climate_data["outdoor temperature min"] = data_list[7]
         climate_data["outdoor temperature max"] = data_list[8]
         climate_data["current wind speed"] = data_list[9]
@@ -98,6 +113,7 @@ def parse_skd_climate_data(line: str) -> dict[str, float]:
         climate_data["relative humidity"] = data_list[15]
         return climate_data
     return {}
+
 
 def parse_smn_motor_names_output(line: str) -> dict[Any, dict[str, int]]:
     """Listen and parse the output of the 'smn' command."""
@@ -111,6 +127,7 @@ def parse_smn_motor_names_output(line: str) -> dict[Any, dict[str, int]]:
             shutters[name] = {"channel": channel}
     return shutters
 
+
 def parse_smc_max_channel_output(line: str) -> int:
     """Parse the output of the 'smc' command."""
     if START_SMC in line and END_SMC in line:
@@ -120,17 +137,20 @@ def parse_smc_max_channel_output(line: str) -> int:
             return int(match.group(1))
     return 0
 
+
 def parse_smo_model_output(line: str) -> str:
     """Parse the output of the 'smo' command."""
     # Example response: 'start_smoHEYtech RS879M  ende_smo'
     return _parse_string_output(line, START_SMO, END_SMO)
+
 
 def parse_sfi_model_output(line: str) -> str:
     """Parse the output of the 'sfi' command."""
     # Example response: 'start_sfi8.027rende_sfi
     return _parse_string_output(line, START_SFI, END_SFI)
 
-def _parse_string_output(line: str, start_command:str, stop_command) -> str:
+
+def _parse_string_output(line: str, start_command: str, stop_command) -> str:
     """Parse the output of any string command command."""
     if start_command in line and stop_command in line:
         match = re.match(rf"{start_command}(.+?){stop_command}", line)
