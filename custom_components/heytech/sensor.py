@@ -49,7 +49,7 @@ async def async_setup_entry(
         current_unique_ids.add(unique_id)
         if "brightness" in name:
             entity = HeytechSensor(
-                coordinator, name, unique_id, SensorDeviceClass.ILLUMINANCE, "lux"
+                coordinator, name, unique_id, SensorDeviceClass.ILLUMINANCE, "lx"
             )
         elif "wind" in name:
             entity = HeytechSensor(
@@ -99,6 +99,16 @@ class HeytechSensor(CoordinatorEntity, SensorEntity):
         # You may want to create a unique ID if you have a unique identifier available.
         # For demo purposes, we'll just base it on the name.
         self._attr_unique_id = unique_id
+
+    @property
+    def attr_device_class(self) -> SensorDeviceClass | None:
+        """Return the device class of the sensor."""
+        return self._attr_device_class
+    
+    @property
+    def attr_native_unit_of_measurement (self) -> str | None:
+        """Return the unit of measurement of the sensor."""
+        return self._attr_native_unit_of_measurement
 
     @property
     def name(self) -> str:
