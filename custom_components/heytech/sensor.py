@@ -7,7 +7,7 @@ import logging
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import TEMP_CELSIUS
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -48,26 +48,24 @@ async def async_setup_entry(
         unique_id = f"{entry.entry_id}_{name}"
         current_unique_ids.add(unique_id)
         if "brightness" in name:
-            entity = HeytechSensor(
-                coordinator, name, unique_id, SensorDeviceClass.ILLUMINANCE, "lx"
+            entity = HeytechBrightnessSensor(
+                coordinator, name, unique_id
             )
         elif "wind" in name:
-            entity = HeytechSensor(
-                coordinator, name, unique_id, SensorDeviceClass.WIND_SPEED, "km/h"
+            entity = HeytechWindSensor(
+                coordinator, name, unique_id
             )
         elif "alarm" in name or "rain" in name:
             entity = HeytechBinarySensor(coordinator, name, unique_id)
         elif "humidity" in name:
-            entity = HeytechSensor(
-                coordinator, name, unique_id, SensorDeviceClass.HUMIDITY, "%"
+            entity = HeytechHumiditySensor(
+                coordinator, name, unique_id
             )
         else:
-            entity = HeytechSensor(
+            entity = HeytechTemperatureSensor(
                 coordinator,
                 name,
-                unique_id,
-                SensorDeviceClass.TEMPERATURE,
-                TEMP_CELSIUS,
+                unique_id
             )
         entities.append(entity)
     async_add_entities(entities)
@@ -76,39 +74,93 @@ async def async_setup_entry(
     await _async_cleanup_entities_and_devices(hass, entry, current_unique_ids)
     await coordinator.async_refresh()
 
+class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
+    """A sensor entity that represents the brightness for a given name from the coordinator data."""
 
-class HeytechSensor(CoordinatorEntity, SensorEntity):
-    """A sensor entity that represents the temperature for a given name from the coordinator data."""
+    _attr_device_class = SensorDeviceClass.ILLUMINANCE
+    _attr_native_unit_of_measurement = "lx"
 
-    _attr_device_class = None
-    _attr_native_unit_of_measurement = None
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        name: str,
+        unique_id: str
+    ) -> None:
+        """Initialize the sensor with the coordinator and the specific name key."""
+        super().__init__(coordinator)
+        self._name = name
+        self._attr_unique_id = unique_id
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return f"{self._name.capitalize().replace('_', ' ')}"
+
+    @property
+    def native_value(self) -> float | None:
+        """
+        Return the current brightness value.
+
+        If the coordinator does not have data for this name,
+        it should return None or handle it gracefully.
+        """
+        # coordinator.data is a dict with keys as names and values as brightness.
+        value = self.coordinator.data.get("climate_data", {}).get(self._name)
+        _LOGGER.debug("Sensor %s has value %s", self._name, value)
+        return float(value) if value is not None else None
+
+class HeytechWindSensor(CoordinatorEntity, SensorEntity):
+    """A sensor entity that represents the wind speed for a given name from the coordinator data."""
+
+    _attr_device_class = SensorDeviceClass.WIND_SPEED
+    _attr_native_unit_of_measurement = "km/h"
 
     def __init__(
         self,
         coordinator: DataUpdateCoordinator,
         name: str,
         unique_id,
-        sensor_class: SensorDeviceClass | None,
-        unit: str | None,
     ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)
         self._name = name
-        self._attr_device_class = sensor_class
-        _attr_native_unit_of_measurement = unit
-        # You may want to create a unique ID if you have a unique identifier available.
-        # For demo purposes, we'll just base it on the name.
         self._attr_unique_id = unique_id
 
     @property
-    def attr_device_class(self) -> SensorDeviceClass | None:
-        """Return the device class of the sensor."""
-        return self._attr_device_class
-    
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return f"{self._name.capitalize().replace('_', ' ')}"
+
     @property
-    def attr_native_unit_of_measurement (self) -> str | None:
-        """Return the unit of measurement of the sensor."""
-        return self._attr_native_unit_of_measurement
+    def native_value(self) -> float | None:
+        """
+        Return the current wind speed value.
+
+        If the coordinator does not have data for this name,
+        it should return None or handle it gracefully.
+        """
+        # coordinator.data is a dict with keys as names and values as wind speeds.
+        value = self.coordinator.data.get("climate_data", {}).get(self._name)
+        _LOGGER.debug("Sensor %s has value %s", self._name, value)
+        return float(value) if value is not None else None
+
+class HeytechTemperatureSensor(CoordinatorEntity, SensorEntity):
+    """A sensor entity that represents the temperature for a given name from the coordinator data."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        name: str,
+        unique_id,
+    ) -> None:
+        """Initialize the sensor with the coordinator and the specific name key."""
+        super().__init__(coordinator)
+        self._name = name
+        self._attr_unique_id = unique_id
+
 
     @property
     def name(self) -> str:
@@ -128,6 +180,40 @@ class HeytechSensor(CoordinatorEntity, SensorEntity):
         _LOGGER.debug("Sensor %s has value %s", self._name, value)
         return float(value) if value is not None else None
 
+class HeytechHumiditySensor(CoordinatorEntity, SensorEntity):
+    """A sensor entity that represents the humidity for a given name from the coordinator data."""
+
+    _attr_device_class = SensorDeviceClass.HUMIDITY
+    _attr_native_unit_of_measurement = "%"
+
+    def __init__(
+        self,
+        coordinator: DataUpdateCoordinator,
+        name: str,
+        unique_id,
+    ) -> None:
+        """Initialize the sensor with the coordinator and the specific name key."""
+        super().__init__(coordinator)
+        self._name = name
+        self._attr_unique_id = unique_id
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return f"{self._name.capitalize().replace('_', ' ')}"
+
+    @property
+    def native_value(self) -> float | None:
+        """
+        Return the current humidity value.
+
+        If the coordinator does not have data for this name,
+        it should return None or handle it gracefully.
+        """
+        # coordinator.data is a dict with keys as names and values as humidity.
+        value = self.coordinator.data.get("climate_data", {}).get(self._name)
+        _LOGGER.debug("Sensor %s has value %s", self._name, value)
+        return float(value) if value is not None else None
 
 class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """A binary sensor entity that represents the alarm state for a given name from the coordinator data."""
