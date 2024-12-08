@@ -392,13 +392,13 @@ async def main() -> None:
         # shutters = await client.async_get_data()
         # _LOGGER.info("Shutters data: %s", shutters)
         #
-        # await client.add_shutter_command("100", [3, 4])
+        # await client.add_command("100", [3, 4])
         #
         # await asyncio.sleep(2)
         #
         # await asyncio.sleep(client.idle_timeout + 5)
         #
-        # await client.add_shutter_command("up", [3, 4])
+        # await client.add_command("up", [3, 4])
         #
         # await asyncio.sleep(2)
     finally:

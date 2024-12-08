@@ -246,7 +246,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             return
         _LOGGER.info("Setting position of %s to %s%%", self._name, position)
         try:
-            await self._api_client.add_shutter_command(f"{position}", self._channels)
+            await self._api_client.add_command(f"{position}", self._channels)
             if self._position is not None:
                 if position > self._position:
                     self._is_opening = True
@@ -271,7 +271,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         """Stop the cover."""
         _LOGGER.info("Stopping %s on channels %s", self._name, self._channels)
         try:
-            await self._api_client.add_shutter_command("stop", self._channels)
+            await self._api_client.add_command("stop", self._channels)
             self._is_opening = False
             self._is_closing = False
             self.async_write_ha_state()
