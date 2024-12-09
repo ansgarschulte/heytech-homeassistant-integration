@@ -87,8 +87,8 @@ def parse_skd_climate_data(line: str) -> dict[str, float]:
         ]  # Replace '999' with None
         data_list[16] = None  # Remove the last element 'ende_skd'
         data_list = [
-            float(data) if data is not None else data for data in data_list
-        ]  # Convert to float if not None
+            int(data) if data is not None else data for data in data_list
+        ]  # Convert to int if not None
 
         climate_data["brightness"] = data_list[0]
         climate_data["indoor temperature"] = (
@@ -99,7 +99,7 @@ def parse_skd_climate_data(line: str) -> dict[str, float]:
         climate_data["indoor temperature min"] = data_list[3]
         climate_data["indoor temperature max"] = data_list[4]
         climate_data["outdoor temperature"] = (
-            float(f"{data_list[5]}.{data_list[6]}")
+            float(f"{int(data_list[5])}.{int(data_list[6])}")
             if data_list[5] is not None and data_list[6] is not None
             else None
         )
