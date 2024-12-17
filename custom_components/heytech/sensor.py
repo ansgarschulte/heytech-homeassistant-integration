@@ -48,31 +48,22 @@ async def async_setup_entry(
         unique_id = f"{entry.entry_id}_{name}"
         current_unique_ids.add(unique_id)
         if "brightness" in name:
-            entity = HeytechBrightnessSensor(
-                coordinator, name, unique_id
-            )
+            entity = HeytechBrightnessSensor(coordinator, name, unique_id)
         elif "wind" in name:
-            entity = HeytechWindSensor(
-                coordinator, name, unique_id
-            )
+            entity = HeytechWindSensor(coordinator, name, unique_id)
         elif "alarm" in name or "rain" in name:
             entity = HeytechBinarySensor(coordinator, name, unique_id)
         elif "humidity" in name:
-            entity = HeytechHumiditySensor(
-                coordinator, name, unique_id
-            )
+            entity = HeytechHumiditySensor(coordinator, name, unique_id)
         else:
-            entity = HeytechTemperatureSensor(
-                coordinator,
-                name,
-                unique_id
-            )
+            entity = HeytechTemperatureSensor(coordinator, name, unique_id)
         entities.append(entity)
     async_add_entities(entities)
 
     # Remove entities and devices that are no longer in the configuration
     await _async_cleanup_entities_and_devices(hass, entry, current_unique_ids)
     await coordinator.async_refresh()
+
 
 class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
     """A sensor entity that represents the brightness for a given name from the coordinator data."""
@@ -81,10 +72,7 @@ class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
     _attr_native_unit_of_measurement = "lx"
 
     def __init__(
-        self,
-        coordinator: DataUpdateCoordinator,
-        name: str,
-        unique_id: str
+        self, coordinator: DataUpdateCoordinator, name: str, unique_id: str
     ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)
@@ -108,6 +96,7 @@ class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
         value = self.coordinator.data.get("climate_data", {}).get(self._name)
         _LOGGER.debug("Sensor %s has value %s", self._name, value)
         return float(value) if value is not None else None
+
 
 class HeytechWindSensor(CoordinatorEntity, SensorEntity):
     """A sensor entity that represents the wind speed for a given name from the coordinator data."""
@@ -144,6 +133,7 @@ class HeytechWindSensor(CoordinatorEntity, SensorEntity):
         _LOGGER.debug("Sensor %s has value %s", self._name, value)
         return float(value) if value is not None else None
 
+
 class HeytechTemperatureSensor(CoordinatorEntity, SensorEntity):
     """A sensor entity that represents the temperature for a given name from the coordinator data."""
 
@@ -160,7 +150,6 @@ class HeytechTemperatureSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._name = name
         self._attr_unique_id = unique_id
-
 
     @property
     def name(self) -> str:
@@ -179,6 +168,7 @@ class HeytechTemperatureSensor(CoordinatorEntity, SensorEntity):
         value = self.coordinator.data.get("climate_data", {}).get(self._name)
         _LOGGER.debug("Sensor %s has value %s", self._name, value)
         return float(value) if value is not None else None
+
 
 class HeytechHumiditySensor(CoordinatorEntity, SensorEntity):
     """A sensor entity that represents the humidity for a given name from the coordinator data."""
@@ -215,6 +205,7 @@ class HeytechHumiditySensor(CoordinatorEntity, SensorEntity):
         _LOGGER.debug("Sensor %s has value %s", self._name, value)
         return float(value) if value is not None else None
 
+
 class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """A binary sensor entity that represents the alarm state for a given name from the coordinator data."""
 
@@ -244,7 +235,7 @@ class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
         # coordinator.data is a dict with keys as names and values as alarm states.
         value = self.coordinator.data.get("climate_data", {}).get(self._name)
         _LOGGER.debug("Binary sensor %s has value %s", self._name, value)
-        return value == "1" if value is not None else False
+        return (value == "1" or value == 1) if value is not None else False
 
 
 async def _async_cleanup_entities_and_devices(
