@@ -65,6 +65,36 @@ async def async_setup_entry(
     await coordinator.async_refresh()
 
 
+def calculate_lux_value_based_on_heytech(value: float) -> float:
+    if value < 10:  # LuxPrefix = 0 --> Lux-Wert n steht für 0.1 ... 0.9 Lux
+        lux_prefix = 0
+        lux = value
+    elif value <= 19:  # LuxPrefix = 1 --> Lux-Wert n steht für 1 ... 900 Lux
+        lux_prefix = 1
+        lux = value - 9
+    elif value <= 28:
+        lux_prefix = 1
+        lux = (value - 20) * 10 + 20
+    elif value <= 36:
+        lux_prefix = 1
+        lux = (value - 29) * 100 + 200
+    elif value <= 136:  # LuxPrefix = 2 --> Lux-Wert n steht für 1 ... 900 kLux
+        lux_prefix = 2
+        lux = value - 36
+    else:
+        lux_prefix = 2
+        lux = (value - 137) * 10 + 110
+
+    if lux_prefix == 0:
+        result_lux = 1 - (10 - lux) / 10
+    elif lux_prefix == 1:
+        result_lux = lux
+    else:  # lux_prefix == 2
+        result_lux = lux * 1000
+
+    return result_lux
+
+
 class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
     """A sensor entity that represents the brightness for a given name from the coordinator data."""
 
@@ -95,7 +125,7 @@ class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
         # coordinator.data is a dict with keys as names and values as brightness.
         value = self.coordinator.data.get("climate_data", {}).get(self._name)
         _LOGGER.debug("Sensor %s has value %s", self._name, value)
-        return float(value) if value is not None else None
+        return calculate_lux_value_based_on_heytech(float(value)) if value is not None else None
 
 
 class HeytechWindSensor(CoordinatorEntity, SensorEntity):
