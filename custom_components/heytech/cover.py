@@ -51,7 +51,7 @@ async def async_setup_entry(
     ]
 
     # Fetch dynamic shutters from the API
-    await api_client.async_get_data()
+    await api_client.async_read_heytech_data()
     dynamic_shutters = api_client.shutters  # Get parsed shutters from the API
 
     # Limit the number of dynamic shutters
@@ -233,6 +233,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
     async def _force_position_refresh_later(self) -> None:
         for _i in range(20):
             await asyncio.sleep(1)
+            await self._api_client.async_read_shutters_positions()
             await self.coordinator.async_refresh()
         self._is_opening = False
         self._is_closing = False
