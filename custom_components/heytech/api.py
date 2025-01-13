@@ -240,7 +240,8 @@ class HeytechApiClient:
     async def async_read_heytech_data(self) -> dict[Any, dict[str, int]]:
         """Send 'smc' and 'smn' commands to fetch shutters data."""
         try:
-            self.shutters = {}
+            if not self.shutters:
+                self.shutters = {}
             self.max_channels = None
             await self.add_command("smc", [])
             await self.add_command("smn", [])

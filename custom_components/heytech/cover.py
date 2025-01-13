@@ -217,7 +217,10 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
                 "Cover '%s' position is unknown. Assuming not closed.", self._name
             )
             return False  # Unknown state
-        return self._position == MIN_POSITION
+        if self._is_awning:
+            return self._position == MAX_POSITION
+        else:
+            return self._position == MIN_POSITION
 
     @property
     def current_cover_position(self) -> int | None:
