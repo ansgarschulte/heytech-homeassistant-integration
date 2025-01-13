@@ -11,7 +11,7 @@ from typing import Any
 
 from homeassistant.components.cover import (
     CoverEntity,
-    CoverEntityFeature,
+    CoverEntityFeature, CoverDeviceClass,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -170,6 +170,10 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
     ) -> None:
         """Initialize the cover."""
         super().__init__(coordinator)
+        if "markise" in name.lower() or "awning" in name.lower():
+            self._is_awning = True
+        else:
+            self._is_awning = False
         self._api_client = api_client
         self._unique_id = unique_id
         self._name = name
@@ -180,6 +184,10 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         self._position: int | None = None  # Current position
         self._is_opening: bool = False
         self._is_closing: bool = False
+        if self._is_awning:
+            self._attr_device_class = CoverDeviceClass.AWNING
+        else:
+            self._attr_device_class = CoverDeviceClass.SHUTTER
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -219,14 +227,20 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
     async def async_open_cover(self, **_kwargs: Any) -> None:
         """Open the cover."""
         _LOGGER.info("Opening %s on channels %s", self._name, self._channels)
-        await self.async_set_cover_position(position=MAX_POSITION)
+        if self._is_awning:
+            await self.async_set_cover_position(position=MIN_POSITION)
+        else:
+            await self.async_set_cover_position(position=MAX_POSITION)
         self._is_opening = True
         self.async_write_ha_state()
 
     async def async_close_cover(self, **_kwargs: Any) -> None:
         """Close the cover."""
         _LOGGER.info("Closing %s on channels %s", self._name, self._channels)
-        await self.async_set_cover_position(position=MIN_POSITION)
+        if self._is_awning:
+            await self.async_set_cover_position(position=MAX_POSITION)
+        else:
+            await self.async_set_cover_position(position=MIN_POSITION)
         self._is_closing = True
         self.async_write_ha_state()
 
