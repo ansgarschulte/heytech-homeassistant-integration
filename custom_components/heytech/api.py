@@ -87,7 +87,6 @@ class HeytechApiClient:
         self.climate_data: dict[str, float] = {}
         self._reconnecting = False
 
-        # self.periodic_task: asyncio.Task | None = None
         self.periodic_task = asyncio.create_task(self._periodic_commands())
 
     async def connect(self) -> None:
@@ -230,7 +229,8 @@ class HeytechApiClient:
 
             if not self.shutter_positions:
                 self._raise_communication_error("Failed to retrieve shutter positions")
-            return self.shutter_positions
+            else:
+                return self.shutter_positions
         except Exception as exc:
             _LOGGER.exception("Failed to get data from Heytech API")
             raise IntegrationHeytechApiClientCommunicationError from exc
@@ -290,7 +290,7 @@ class HeytechApiClient:
         raise IntegrationHeytechApiClientCommunicationError(message)
 
     async def _periodic_commands(self) -> None:
-        """Send 'sop' command every x seconds and 'skd' command every y (y>x) minutes."""
+        """Send 'sop' command every x sec and 'skd' command every y (y>x) minutes."""
         last_skd = asyncio.get_event_loop().time()
         while True:
             now = asyncio.get_event_loop().time()
@@ -437,7 +437,7 @@ async def main() -> None:
         _LOGGER.info("Climate data: %s", climate_data)
 
         # Normal commands will have priority over the periodic "sop" and "skd" commands.
-        # await client.add_command("100", [3, 4])
+        await client.add_command("100", [3, 4])
         await asyncio.sleep(30)
         positions = client.get_shutter_positions()
         _LOGGER.info("Shutter positions: %s", positions)

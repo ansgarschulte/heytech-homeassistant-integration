@@ -1,4 +1,8 @@
-"""Platform for sensor integration that creates multiple entities from a coordinator dict."""
+"""
+Platform for sensor integration.
+
+that creates multiple entities from a coordinator dict.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,16 @@ from homeassistant.helpers.update_coordinator import (
 
 from .const import DOMAIN  # Make sure you have DOMAIN defined in const.py
 
+LUX_10 = 10
+
+LUX_136 = 136
+
+LUX_36 = 36
+
+LUX_28 = 28
+
+LUX_19 = 19
+
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -32,6 +46,7 @@ async def async_setup_entry(
 ) -> None:
     """
     Set up sensors for the given config entry.
+
     The coordinator should store data as a dict, e.g.:
     coordinator.data = {
         "living_room": 20.5,
@@ -70,19 +85,20 @@ async def async_setup_entry(
 
 
 def calculate_lux_value_based_on_heytech(value: float) -> float:
-    if value < 10:  # LuxPrefix = 0 --> Lux-Wert n steht für 0.1 ... 0.9 Lux
+    """Calculate the lux value based on the Heytech value."""
+    if value < LUX_10:  # LuxPrefix = 0 --> Lux-Wert n steht für 0.1 ... 0.9 Lux
         lux_prefix = 0
         lux = value
-    elif value <= 19:  # LuxPrefix = 1 --> Lux-Wert n steht für 1 ... 900 Lux
+    elif value <= LUX_19:  # LuxPrefix = 1 --> Lux-Wert n steht für 1 ... 900 Lux
         lux_prefix = 1
         lux = value - 9
-    elif value <= 28:
+    elif value <= LUX_28:
         lux_prefix = 1
         lux = (value - 20) * 10 + 20
-    elif value <= 36:
+    elif value <= LUX_36:
         lux_prefix = 1
         lux = (value - 29) * 100 + 200
-    elif value <= 136:  # LuxPrefix = 2 --> Lux-Wert n steht für 1 ... 900 kLux
+    elif value <= LUX_136:  # LuxPrefix = 2 --> Lux-Wert n steht für 1 ... 900 kLux
         lux_prefix = 2
         lux = value - 36
     else:
@@ -100,7 +116,7 @@ def calculate_lux_value_based_on_heytech(value: float) -> float:
 
 
 class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
-    """A sensor entity that represents the brightness for a given name from the coordinator data."""
+    """A sensor entity that represents the brightness for a given name."""
 
     _attr_device_class = SensorDeviceClass.ILLUMINANCE
     _attr_native_unit_of_measurement = "lx"
@@ -108,7 +124,7 @@ class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
     def __init__(
         self, coordinator: DataUpdateCoordinator, name: str, unique_id: str
     ) -> None:
-        """Initialize the sensor with the coordinator and the specific name key."""
+        """Initialize the sensor with the coordinator and name."""
         super().__init__(coordinator)
         self._name = name
         self._attr_unique_id = unique_id
@@ -137,7 +153,7 @@ class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
 
 
 class HeytechWindSensor(CoordinatorEntity, SensorEntity):
-    """A sensor entity that represents the wind speed for a given name from the coordinator data."""
+    """A sensor entity that represents the wind speed for a given name."""
 
     _attr_device_class = SensorDeviceClass.WIND_SPEED
     _attr_native_unit_of_measurement = "km/h"
@@ -146,7 +162,7 @@ class HeytechWindSensor(CoordinatorEntity, SensorEntity):
         self,
         coordinator: DataUpdateCoordinator,
         name: str,
-        unique_id,
+        unique_id: str,
     ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)
@@ -173,7 +189,7 @@ class HeytechWindSensor(CoordinatorEntity, SensorEntity):
 
 
 class HeytechTemperatureSensor(CoordinatorEntity, SensorEntity):
-    """A sensor entity that represents the temperature for a given name from the coordinator data."""
+    """A sensor entity that represents the temperature for a given name."""
 
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -182,7 +198,7 @@ class HeytechTemperatureSensor(CoordinatorEntity, SensorEntity):
         self,
         coordinator: DataUpdateCoordinator,
         name: str,
-        unique_id,
+        unique_id: str,
     ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)
@@ -209,16 +225,13 @@ class HeytechTemperatureSensor(CoordinatorEntity, SensorEntity):
 
 
 class HeytechHumiditySensor(CoordinatorEntity, SensorEntity):
-    """A sensor entity that represents the humidity for a given name from the coordinator data."""
+    """A sensor entity that represents the humidity for a given name."""
 
     _attr_device_class = SensorDeviceClass.HUMIDITY
     _attr_native_unit_of_measurement = "%"
 
     def __init__(
-        self,
-        coordinator: DataUpdateCoordinator,
-        name: str,
-        unique_id,
+        self, coordinator: DataUpdateCoordinator, name: str, unique_id: str
     ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)
@@ -245,10 +258,10 @@ class HeytechHumiditySensor(CoordinatorEntity, SensorEntity):
 
 
 class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
-    """A binary sensor entity that represents the alarm state for a given name from the coordinator data."""
+    """Binary sensor entity represents the alarm state for a given name."""
 
     def __init__(
-        self, coordinator: DataUpdateCoordinator, name: str, unique_id
+        self, coordinator: DataUpdateCoordinator, name: str, unique_id: str
     ) -> None:
         """Initialize the sensor with the coordinator and the specific name key."""
         super().__init__(coordinator)

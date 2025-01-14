@@ -55,8 +55,8 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, dict[any, any]]:
         """Fetch data from the Heytech API."""
+        result = {}
         try:
-            result = {}
             positions = self.api_client.get_shutter_positions()
             climate_data = self.api_client.get_climate_data()
             if not positions:
@@ -71,11 +71,12 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             if positions:
                 self.shutter_positions = positions
                 result["shutter_positions"] = positions
-            return result
         except Exception as exception:
             error_message = f"Error fetching shutter positions: {exception}"
             LOGGER.error(error_message)
             raise UpdateFailed(error_message) from exception
+        else:
+            return result
 
     async def _handle_no_data(self) -> None:
         """Handle the case when no shutter positions are received."""

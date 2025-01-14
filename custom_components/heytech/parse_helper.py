@@ -70,7 +70,8 @@ def parse_sop_shutter_positions(line: str) -> dict[int, int]:
 
 def parse_skd_climate_data(line: str) -> dict[str, float]:
     """Get Climate data from the 'skd' command."""
-    # Example response: 'start_skd0,999,999,999,999,999,999,999,999,0,0,0,0,1,0,0,ende_skd'
+    # Example response:
+    # start_skd0,999,999,999,999,999,999,999,999,0,0,0,0,1,0,0,ende_skd
     if START_SKD in line and END_SKD in line:
         # Extract positions between 'start_sdk' and 'ende_sdk'
         start_index = line.find(START_SKD) + len(START_SKD)
@@ -150,8 +151,8 @@ def parse_sfi_model_output(line: str) -> str:
     return _parse_string_output(line, START_SFI, END_SFI)
 
 
-def _parse_string_output(line: str, start_command: str, stop_command) -> str:
-    """Parse the output of any string command command."""
+def _parse_string_output(line: str, start_command: str, stop_command: str) -> str:
+    """Parse the output of any string command."""
     if start_command in line and stop_command in line:
         match = re.match(rf"{start_command}(.+?){stop_command}", line)
         if match:
