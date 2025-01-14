@@ -125,7 +125,11 @@ class HeytechBrightnessSensor(CoordinatorEntity, SensorEntity):
         # coordinator.data is a dict with keys as names and values as brightness.
         value = self.coordinator.data.get("climate_data", {}).get(self._name)
         _LOGGER.debug("Sensor %s has value %s", self._name, value)
-        return calculate_lux_value_based_on_heytech(float(value)) if value is not None else None
+        return (
+            calculate_lux_value_based_on_heytech(float(value))
+            if value is not None
+            else None
+        )
 
 
 class HeytechWindSensor(CoordinatorEntity, SensorEntity):

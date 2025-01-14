@@ -10,8 +10,9 @@ import logging
 from typing import Any
 
 from homeassistant.components.cover import (
+    CoverDeviceClass,
     CoverEntity,
-    CoverEntityFeature, CoverDeviceClass,
+    CoverEntityFeature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -219,8 +220,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             return False  # Unknown state
         if self._is_awning:
             return self._position == MAX_POSITION
-        else:
-            return self._position == MIN_POSITION
+        return self._position == MIN_POSITION
 
     @property
     def current_cover_position(self) -> int | None:

@@ -55,7 +55,7 @@ class HeytechApiClient:
     """Client for interacting with Heytech devices."""
 
     def __init__(
-            self, host: str, port: int = 1002, pin: str = "", idle_timeout: int = 10
+        self, host: str, port: int = 1002, pin: str = "", idle_timeout: int = 10
     ) -> None:
         """
         Initialize the API client.
@@ -265,21 +265,20 @@ class HeytechApiClient:
         """Return the latest shutter positions."""
         return self.shutter_positions
 
-    async def async_wait_for_shutter_positions(self) ->  dict[int, int]:
-        """wait for shutter positions"""
+    async def async_wait_for_shutter_positions(self) -> dict[int, int]:
+        """Wait for shutter positions"""
         max_wait = 20
         while not self.shutter_positions and max_wait > 0:
             await asyncio.sleep(0.5)
             max_wait -= 1
         return self.shutter_positions
 
-
     def get_climate_data(self) -> dict[str, float]:
         """Return the latest climate data."""
         return self.climate_data
 
     async def async_get_climate_data(self) -> dict[str, float]:
-        """wait for climate data"""
+        """Wait for climate data"""
         max_wait = 20
         while not self.climate_data and max_wait > 0:
             await asyncio.sleep(0.5)
@@ -340,9 +339,9 @@ class HeytechApiClient:
                     _LOGGER.error("Writer is not available. Cannot send command.")
                     self._raise_communication_error("Writer is not available")
                 except (
-                        ConnectionResetError,
-                        BrokenPipeError,
-                        IntegrationHeytechApiClientCommunicationError,
+                    ConnectionResetError,
+                    BrokenPipeError,
+                    IntegrationHeytechApiClientCommunicationError,
                 ):
                     retries += 1
                     _LOGGER.exception(
@@ -403,9 +402,9 @@ class HeytechApiClient:
             await asyncio.sleep(1)
             current_time = asyncio.get_event_loop().time()
             if (
-                    current_time - self.last_activity > self.idle_timeout
-                    and self.command_queue.empty()
-                    and self.periodic_command_queue.empty()
+                current_time - self.last_activity > self.idle_timeout
+                and self.command_queue.empty()
+                and self.periodic_command_queue.empty()
             ):
                 _LOGGER.debug("Idle timeout reached, disconnecting")
                 await self.disconnect()

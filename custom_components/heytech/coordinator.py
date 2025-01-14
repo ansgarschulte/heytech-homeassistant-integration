@@ -34,7 +34,8 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
         self.climate_data: dict[str, str] = {}
 
     async def _async_setup(self):
-        """Set up the coordinator
+        """
+        Set up the coordinator
 
         This is the place to set up your coordinator,
         or to load data, that only needs to be loaded once.
@@ -51,7 +52,6 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
         if not climate_data:
             _LOGGER.warning("No climate data received.")
             await self._handle_no_data()
-
 
     async def _async_update_data(self) -> dict[str, dict[any, any]]:
         """Fetch data from the Heytech API."""

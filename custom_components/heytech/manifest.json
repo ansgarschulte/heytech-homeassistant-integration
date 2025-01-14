@@ -10,5 +10,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/ansgarschulte/heytech-homeassistant-integration/issues",
   "single_config_entry": true,
-  "version": "0.6.7"
+  "version": "0.7.0"
 }
