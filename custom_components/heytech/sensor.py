@@ -3,22 +3,26 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
 
 from .const import DOMAIN  # Make sure you have DOMAIN defined in const.py
-from .data import IntegrationHeytechConfigEntry
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from .data import IntegrationHeytechConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +37,7 @@ async def async_setup_entry(
         "living_room": 20.5,
         "kitchen": 21.3,
         ...
-    }
+    }.
     """
     coordinator: DataUpdateCoordinator[dict[str, dict[any, any]]] = hass.data[DOMAIN][
         entry.entry_id
@@ -269,7 +273,7 @@ class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
         # coordinator.data is a dict with keys as names and values as alarm states.
         value = self.coordinator.data.get("climate_data", {}).get(self._name)
         _LOGGER.debug("Binary sensor %s has value %s", self._name, value)
-        return (value == "1" or value == 1) if value is not None else False
+        return (value in ("1", 1)) if value is not None else False
 
 
 async def _async_cleanup_entities_and_devices(

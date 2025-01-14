@@ -266,7 +266,7 @@ class HeytechApiClient:
         return self.shutter_positions
 
     async def async_wait_for_shutter_positions(self) -> dict[int, int]:
-        """Wait for shutter positions"""
+        """Wait for shutter positions."""
         max_wait = 20
         while not self.shutter_positions and max_wait > 0:
             await asyncio.sleep(0.5)
@@ -278,7 +278,7 @@ class HeytechApiClient:
         return self.climate_data
 
     async def async_get_climate_data(self) -> dict[str, float]:
-        """Wait for climate data"""
+        """Wait for climate data."""
         max_wait = 20
         while not self.climate_data and max_wait > 0:
             await asyncio.sleep(0.5)

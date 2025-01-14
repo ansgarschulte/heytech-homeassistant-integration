@@ -33,9 +33,9 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
         self.shutter_positions: dict[int, int] = {}
         self.climate_data: dict[str, str] = {}
 
-    async def _async_setup(self):
+    async def _async_setup(self) -> None:
         """
-        Set up the coordinator
+        Set up the coordinator.
 
         This is the place to set up your coordinator,
         or to load data, that only needs to be loaded once.
