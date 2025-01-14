@@ -81,12 +81,14 @@ class HeytechApiClient:
         self.connection_task: asyncio.Task | None = None
         self.read_task: asyncio.Task | None = None
         self.idle_task: asyncio.Task | None = None
-        self.periodic_task: asyncio.Task | None = None
         self.max_channels: int | None = None
         self.shutter_positions: dict[int, int] = {}
         self.shutters: dict[Any, dict[str, int]] = {}
         self.climate_data: dict[str, float] = {}
         self._reconnecting = False
+
+        # self.periodic_task: asyncio.Task | None = None
+        self.periodic_task = asyncio.create_task(self._periodic_commands())
 
     async def connect(self) -> None:
         """Connect to the Heytech device."""
@@ -101,7 +103,6 @@ class HeytechApiClient:
                 self.last_activity = asyncio.get_event_loop().time()
                 self.read_task = asyncio.create_task(self._read_output())
                 self.idle_task = asyncio.create_task(self._idle_checker())
-                self.periodic_task = asyncio.create_task(self._periodic_commands())
                 _LOGGER.debug(
                     "Connected to Heytech device at %s:%s", self.host, self.port
                 )
@@ -126,9 +127,6 @@ class HeytechApiClient:
             if self.idle_task:
                 self.idle_task.cancel()
                 self.idle_task = None
-            if self.periodic_task:
-                self.periodic_task.cancel()
-                self.periodic_task = None
             if self.connection_task:
                 self.connection_task.cancel()
                 self.connection_task = None
@@ -240,9 +238,6 @@ class HeytechApiClient:
     async def async_read_heytech_data(self) -> dict[Any, dict[str, int]]:
         """Send 'smc' and 'smn' commands to fetch shutters data."""
         try:
-            if not self.shutters:
-                self.shutters = {}
-            self.max_channels = None
             await self.add_command("smc", [])
             await self.add_command("smn", [])
             await self.add_command("sop", [])
@@ -252,14 +247,14 @@ class HeytechApiClient:
             while not self.max_channels and max_wait > 0:
                 await asyncio.sleep(0.1)
                 max_wait -= 1
-
             max_wait = 50
             while len(self.shutters) < (self.max_channels or 0) and max_wait > 0:
                 await asyncio.sleep(0.1)
                 max_wait -= 1
-
             if not self.shutters:
                 self._raise_communication_error("Failed to retrieve shutters data")
+            await self.async_read_shutters_positions()
+            await self.async_get_climate_data()
         except Exception as exc:
             _LOGGER.exception("Failed to get data from Heytech API")
             raise IntegrationHeytechApiClientCommunicationError from exc
@@ -298,12 +293,13 @@ class HeytechApiClient:
     async def _periodic_commands(self) -> None:
         """Send 'sop' command every x seconds and 'skd' command every y (y>x) minutes."""
         last_skd = asyncio.get_event_loop().time()
-        while self.connected:
+        while True:
             now = asyncio.get_event_loop().time()
             # Send 'sop' every SOP_INTERVAL seconds
             await asyncio.sleep(SOP_INTERVAL)
-            if self.connected:
-                await self._add_periodic_command("sop", [])
+            if not self.connected:
+                await self.connect()
+            await self._add_periodic_command("sop", [])
 
             # Check if it's time to send 'skd'
             if now - last_skd >= SKD_INTERVAL and self.connected:
@@ -383,8 +379,8 @@ class HeytechApiClient:
                     self.max_channels = parse_smc_max_channel_output(line)
                 elif START_SKD in line and END_SKD in line:
                     self.climate_data = parse_skd_climate_data(line)
-            except asyncio.CancelledError:
-                _LOGGER.debug("Read task cancelled")
+            except asyncio.CancelledError as e:
+                _LOGGER.debug("Read task cancelled: %s", e)
                 await self.disconnect()
                 break
             except (ConnectionResetError, asyncio.IncompleteReadError):
@@ -420,6 +416,9 @@ class HeytechApiClient:
             self.connection_task.cancel()
             self.connection_task = None
         await self.disconnect()
+        if self.periodic_task:
+            self.periodic_task.cancel()
+            self.periodic_task = None
 
 
 # Usage example (for testing purposes)
@@ -432,14 +431,17 @@ async def main() -> None:
         await client.async_read_heytech_data()
 
         positions = await client.async_wait_for_shutter_positions()
+        _LOGGER.info("Shutter positions: %s", positions)
         positions = client.get_shutter_positions()
         _LOGGER.info("Shutter positions: %s", positions)
         climate_data = client.get_climate_data()
         _LOGGER.info("Climate data: %s", climate_data)
 
         # Normal commands will have priority over the periodic "sop" and "skd" commands.
-        await client.add_command("100", [3, 4])
-        await asyncio.sleep(2)
+        # await client.add_command("100", [3, 4])
+        await asyncio.sleep(30)
+        positions = client.get_shutter_positions()
+        _LOGGER.info("Shutter positions: %s", positions)
 
     finally:
         await client.stop()

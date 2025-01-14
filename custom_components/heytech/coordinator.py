@@ -26,7 +26,7 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             hass=hass,
             logger=LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=60),  # Adjust as needed
+            update_interval=timedelta(seconds=30),  # Adjust as needed
             always_update=False,
         )
         self.api_client = api_client
