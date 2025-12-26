@@ -86,6 +86,7 @@ class HeytechApiClient:
         self.shutters: dict[Any, dict[str, int]] = {}
         self.climate_data: dict[str, float] = {}
         self._reconnecting = False
+        self._discovery_complete: asyncio.Event | None = None
 
         self.periodic_task = asyncio.create_task(self._periodic_commands())
 
@@ -238,19 +239,55 @@ class HeytechApiClient:
     async def async_read_heytech_data(self) -> dict[Any, dict[str, int]]:
         """Send 'smc' and 'smn' commands to fetch shutters data."""
         try:
+            # Reset discovery state before each run
+            self.shutters = {}
+            self.max_channels = None
+            self._discovery_complete = asyncio.Event()
+            
             await self.add_command("smc", [])
             await self.add_command("smn", [])
             await self.add_command("sop", [])
             await self.add_command("skd", [])
 
+            # Wait for max_channels to be set
             max_wait = 50
             while not self.max_channels and max_wait > 0:
                 await asyncio.sleep(0.1)
                 max_wait -= 1
-            max_wait = 50
-            while len(self.shutters) < (self.max_channels or 0) and max_wait > 0:
-                await asyncio.sleep(0.1)
-                max_wait -= 1
+            
+            if not self.max_channels:
+                _LOGGER.warning("Failed to retrieve max_channels, falling back to timeout")
+                # Fallback: wait for stable count
+                stable_cycles = 0
+                last_count = -1
+                max_stable_cycles = 15
+                
+                while stable_cycles < max_stable_cycles:
+                    await asyncio.sleep(0.2)
+                    if len(self.shutters) == last_count:
+                        stable_cycles += 1
+                    else:
+                        stable_cycles = 0
+                        last_count = len(self.shutters)
+            else:
+                # Event-based: wait until all shutters discovered or timeout
+                try:
+                    await asyncio.wait_for(
+                        self._discovery_complete.wait(), 
+                        timeout=10.0
+                    )
+                    _LOGGER.debug(
+                        "Discovery complete: %d/%d shutters found",
+                        len(self.shutters),
+                        self.max_channels
+                    )
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        "Discovery timeout: found %d shutters, expected up to %d channels",
+                        len(self.shutters),
+                        self.max_channels
+                    )
+            
             if not self.shutters:
                 self._raise_communication_error("Failed to retrieve shutters data")
             await self.async_read_shutters_positions()
@@ -374,6 +411,12 @@ class HeytechApiClient:
                 elif START_SMN in line and END_SMN in line:
                     one_shutter = parse_smn_motor_names_output(line)
                     self.shutters = {**self.shutters, **one_shutter}
+                    
+                    # Signal discovery complete when all channels processed
+                    if (self._discovery_complete 
+                        and self.max_channels 
+                        and len(self.shutters) >= self.max_channels):
+                        self._discovery_complete.set()
                 elif START_SMC in line and END_SMC in line:
                     self.max_channels = parse_smc_max_channel_output(line)
                 elif START_SKD in line and END_SKD in line:
