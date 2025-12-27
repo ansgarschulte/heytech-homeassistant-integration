@@ -22,6 +22,34 @@ START_SMO = "start_smo"
 END_SMO = "ende_smo"
 START_SFI = "start_sfi"
 END_SFI = "ende_sfi"
+START_SZN = "start_szn"
+END_SZN = "ende_szn"
+START_SSZ = "start_ssz"
+END_SSZ = "ende_ssz"
+START_SAU = "start_sau"
+END_SAU = "ende_sau"
+START_SGR = "start_sgr"
+END_SGR = "ende_sgr"
+START_SGZ = "start_sgz"
+END_SGZ = "ende_sgz"
+START_SLD = "start_sld"
+END_SLD = "ende_sld"
+START_SLA = "start_sla"
+END_SLA = "ende_sla"
+START_SJP = "start_sjp"
+END_SJP = "ende_sjp"
+START_SFS = "start_sfs"
+END_SFS = "ende_sfs"
+START_SBP = "start_sbp"
+END_SBP = "ende_sbp"
+START_SDM = "start_sdm"
+END_SDM = "ende_sdm"
+START_SDA = "start_sda"
+END_SDA = "ende_sda"
+START_SWP = "start_swp"
+END_SWP = "ende_swp"
+START_SRP = "start_srp"
+END_SRP = "ende_srp"
 
 
 def parse_sop_shutter_positions(line: str) -> dict[int, int]:
@@ -158,3 +186,275 @@ def _parse_string_output(line: str, start_command: str, stop_command: str) -> st
         if match:
             return str(match.group(1))
     return "Unknown"
+
+
+def parse_szn_scenario_names_output(line: str) -> dict[int, str]:
+    """
+    Parse scenario names from the 'szn' command.
+    
+    Example response: 'start_szn1,Scenario Name,1,ende_szn'
+    Returns dict with scenario number as key and name as value.
+    """
+    scenarios = {}
+    if START_SZN in line and END_SZN in line:
+        match = re.match(r"start_szn(\d+),(.+?),(\d+),ende_szn", line)
+        if match:
+            scenario_num = int(match.group(1))
+            name = match.group(2).strip()
+            scenarios[scenario_num] = name
+    return scenarios
+
+
+def parse_ssz_scenarios_output(line: str) -> dict[int, dict[str, Any]]:
+    """
+    Parse scenario configuration from the 'ssz' command.
+    
+    Example response: 'start_ssz1,50,60,70,...ende_ssz'
+    Returns dict with scenario number and channel positions.
+    """
+    scenarios = {}
+    if START_SSZ in line and END_SSZ in line:
+        # Extract data between markers
+        start_index = line.find(START_SSZ) + len(START_SSZ)
+        end_index = line.rfind(END_SSZ)
+        data_str = line[start_index:end_index]
+        
+        parts = data_str.split(",")
+        if len(parts) > 0:
+            try:
+                scenario_num = int(parts[0])
+                positions = [int(p) if p.strip().isdigit() else None 
+                           for p in parts[1:]]
+                scenarios[scenario_num] = {
+                    "positions": positions
+                }
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse scenario data: %s", line)
+    return scenarios
+
+
+def parse_sau_automation_status(line: str) -> bool | None:
+    """
+    Parse automation status from the 'sau' command.
+    
+    Example response: 'start_sau1ende_sau' (1=enabled, 0=disabled)
+    Returns True if automation is enabled, False if disabled, None on error.
+    """
+    if START_SAU in line and END_SAU in line:
+        match = re.match(r"start_sau(\d+)ende_sau", line)
+        if match:
+            status = int(match.group(1))
+            return status == 1
+    return None
+
+
+def parse_sgr_groups_output(line: str) -> dict[int, list[int]]:
+    """
+    Parse group assignments from the 'sgr' command.
+    
+    Example response: 'start_sgr1,1,2,3,0,0,0,...ende_sgr'
+    Returns dict with group number as key and list of channel numbers as value.
+    """
+    groups = {}
+    if START_SGR in line and END_SGR in line:
+        # Extract data between markers
+        start_index = line.find(START_SGR) + len(START_SGR)
+        end_index = line.rfind(END_SGR)
+        data_str = line[start_index:end_index]
+        
+        parts = data_str.split(",")
+        if len(parts) > 0:
+            try:
+                group_num = int(parts[0])
+                # Filter out 0 values (inactive channels)
+                channels = [int(ch) for ch in parts[1:] if ch.strip() and int(ch) > 0]
+                if channels:  # Only add if group has channels
+                    groups[group_num] = channels
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse group data: %s", line)
+    return groups
+
+
+def parse_sgz_group_control_output(line: str) -> dict[int, str]:
+    """
+    Parse group control settings from the 'sgz' command.
+    
+    Example response: 'start_sgz1,Group Name,1,ende_sgz'
+    Returns dict with group number and name.
+    """
+    group_info = {}
+    if START_SGZ in line and END_SGZ in line:
+        match = re.match(r"start_sgz(\d+),(.+?),(\d+),ende_sgz", line)
+        if match:
+            group_num = int(match.group(1))
+            name = match.group(2).strip()
+            group_info[group_num] = name
+    return group_info
+
+
+def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
+    """
+    Parse logbook entry from the 'sld' command.
+    
+    Example response: 'start_sld1;Living Room;2024-12-27;09:15:30;up;Manual,ende_sld'
+    Returns dict with logbook entry details.
+    """
+    if START_SLD in line and END_SLD in line:
+        # Extract data between markers
+        start_index = line.find(START_SLD) + len(START_SLD)
+        end_index = line.rfind(END_SLD)
+        data_str = line[start_index:end_index]
+        
+        # Logbook format: Nr;Motor/Raum;Datum;Uhrzeit;Richtung;Ausgelöst
+        parts = data_str.split(";")
+        if len(parts) >= 6:
+            try:
+                return {
+                    "entry_number": int(parts[0]),
+                    "motor_room": parts[1].strip(),
+                    "date": parts[2].strip(),
+                    "time": parts[3].strip(),
+                    "direction": parts[4].strip(),
+                    "trigger": parts[5].strip() if len(parts) > 5 else "",
+                }
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse logbook entry: %s", line)
+    return None
+
+
+def parse_sla_logbook_count(line: str) -> int:
+    """
+    Parse number of logbook entries from the 'sla' command.
+    
+    Example response: 'start_sla150ende_sla'
+    Returns number of entries.
+    """
+    if START_SLA in line and END_SLA in line:
+        match = re.match(r"start_sla(\d+)ende_sla", line)
+        if match:
+            return int(match.group(1))
+    return 0
+
+
+def parse_sjp_jalousie_params(line: str) -> dict[str, Any] | None:
+    """
+    Parse jalousie parameters from the 'sjp' command.
+    
+    Example response: 'start_sjp1,50,30,1,ende_sjp'
+    Channel, tilt open angle, tilt close angle, tilt enabled
+    """
+    if START_SJP in line and END_SJP in line:
+        start_index = line.find(START_SJP) + len(START_SJP)
+        end_index = line.rfind(END_SJP)
+        data_str = line[start_index:end_index]
+        
+        parts = data_str.split(",")
+        if len(parts) >= 4:
+            try:
+                return {
+                    "channel": int(parts[0]),
+                    "tilt_open_angle": int(parts[1]),
+                    "tilt_close_angle": int(parts[2]),
+                    "tilt_enabled": int(parts[3]) == 1,
+                }
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse jalousie params: %s", line)
+    return None
+
+
+def parse_sfs_fixed_schedule(line: str) -> dict[str, Any] | None:
+    """
+    Parse fixed schedule from the 'sfs' command.
+    
+    Example response: 'start_sfs1,08:00,down,20:00,up,1,ende_sfs'
+    """
+    if START_SFS in line and END_SFS in line:
+        start_index = line.find(START_SFS) + len(START_SFS)
+        end_index = line.rfind(END_SFS)
+        data_str = line[start_index:end_index]
+        
+        parts = data_str.split(",")
+        if len(parts) >= 6:
+            try:
+                return {
+                    "channel": int(parts[0]),
+                    "time1": parts[1].strip(),
+                    "action1": parts[2].strip(),
+                    "time2": parts[3].strip(),
+                    "action2": parts[4].strip(),
+                    "enabled": int(parts[5]) == 1,
+                }
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse fixed schedule: %s", line)
+    return None
+
+
+def parse_sbp_shading_params(line: str) -> dict[str, Any] | None:
+    """
+    Parse shading parameters from the 'sbp' command.
+    
+    Example response: 'start_sbp1,50,30,1,ende_sbp'
+    Channel, brightness threshold, position, enabled
+    """
+    if START_SBP in line and END_SBP in line:
+        start_index = line.find(START_SBP) + len(START_SBP)
+        end_index = line.rfind(END_SBP)
+        data_str = line[start_index:end_index]
+        
+        parts = data_str.split(",")
+        if len(parts) >= 4:
+            try:
+                return {
+                    "channel": int(parts[0]),
+                    "brightness_threshold": int(parts[1]),
+                    "position": int(parts[2]),
+                    "enabled": int(parts[3]) == 1,
+                }
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse shading params: %s", line)
+    return None
+
+
+def parse_automation_params(line: str, start_marker: str, end_marker: str) -> dict[str, Any] | None:
+    """
+    Generic parser for automation parameters (dawn, dusk, wind, rain).
+    
+    Common format: 'start_XXX1,threshold,action,enabled,ende_XXX'
+    """
+    if start_marker in line and end_marker in line:
+        start_index = line.find(start_marker) + len(start_marker)
+        end_index = line.rfind(end_marker)
+        data_str = line[start_index:end_index]
+        
+        parts = data_str.split(",")
+        if len(parts) >= 4:
+            try:
+                return {
+                    "channel": int(parts[0]),
+                    "threshold": int(parts[1]) if parts[1].isdigit() else parts[1].strip(),
+                    "action": parts[2].strip(),
+                    "enabled": int(parts[3]) == 1,
+                }
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse automation params: %s", line)
+    return None
+
+
+def parse_sdm_dawn_params(line: str) -> dict[str, Any] | None:
+    """Parse dawn automation parameters."""
+    return parse_automation_params(line, START_SDM, END_SDM)
+
+
+def parse_sda_dusk_params(line: str) -> dict[str, Any] | None:
+    """Parse dusk automation parameters."""
+    return parse_automation_params(line, START_SDA, END_SDA)
+
+
+def parse_swp_wind_params(line: str) -> dict[str, Any] | None:
+    """Parse wind automation parameters."""
+    return parse_automation_params(line, START_SWP, END_SWP)
+
+
+def parse_srp_rain_params(line: str) -> dict[str, Any] | None:
+    """Parse rain automation parameters."""
+    return parse_automation_params(line, START_SRP, END_SRP)

@@ -10,8 +10,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import voluptuous as vol
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 
 from .api import HeytechApiClient
 from .const import CONF_PIN, DOMAIN
@@ -19,10 +21,30 @@ from .coordinator import HeytechDataUpdateCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import HomeAssistant, ServiceCall
 
-PLATFORMS: list[Platform] = [Platform.COVER, Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.COVER, Platform.SENSOR, Platform.SCENE]
 _LOGGER = logging.getLogger(__name__)
+
+# Service schemas
+SERVICE_READ_LOGBOOK = "read_logbook"
+SERVICE_CLEAR_LOGBOOK = "clear_logbook"
+SERVICE_CONTROL_GROUP = "control_group"
+
+SCHEMA_READ_LOGBOOK = vol.Schema(
+    {
+        vol.Optional("max_entries", default=50): cv.positive_int,
+    }
+)
+
+SCHEMA_CLEAR_LOGBOOK = vol.Schema({})
+
+SCHEMA_CONTROL_GROUP = vol.Schema(
+    {
+        vol.Required("group_number"): cv.positive_int,
+        vol.Required("action"): cv.string,
+    }
+)
 
 
 async def async_setup_entry(
@@ -85,8 +107,63 @@ async def async_setup_entry(
     # Add an update listener to handle option changes
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
+    # Register services
+    await async_setup_services(hass, api_client)
+
     _LOGGER.info("Heytech integration setup successfully for entry %s", entry.entry_id)
     return True
+
+
+async def async_setup_services(
+    hass: HomeAssistant, api_client: HeytechApiClient
+) -> None:
+    """Set up services for Heytech integration."""
+
+    async def handle_read_logbook(call: ServiceCall) -> None:
+        """Handle the read_logbook service call."""
+        max_entries = call.data.get("max_entries", 50)
+        _LOGGER.info("Reading logbook with max %d entries", max_entries)
+        entries = await api_client.async_read_logbook(max_entries)
+        _LOGGER.info("Read %d logbook entries", len(entries))
+        # Optionally fire an event with the logbook data
+        hass.bus.async_fire(
+            "heytech_logbook_read",
+            {"entries": entries, "count": len(entries)},
+        )
+
+    async def handle_clear_logbook(call: ServiceCall) -> None:
+        """Handle the clear_logbook service call."""
+        _LOGGER.info("Clearing logbook")
+        await api_client.async_clear_logbook()
+
+    async def handle_control_group(call: ServiceCall) -> None:
+        """Handle the control_group service call."""
+        group_number = call.data["group_number"]
+        action = call.data["action"]
+        _LOGGER.info("Controlling group %d with action %s", group_number, action)
+        await api_client.async_control_group(group_number, action)
+
+    # Register services only once
+    if not hass.services.has_service(DOMAIN, SERVICE_READ_LOGBOOK):
+        hass.services.async_register(
+            DOMAIN, SERVICE_READ_LOGBOOK, handle_read_logbook, schema=SCHEMA_READ_LOGBOOK
+        )
+    
+    if not hass.services.has_service(DOMAIN, SERVICE_CLEAR_LOGBOOK):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_CLEAR_LOGBOOK,
+            handle_clear_logbook,
+            schema=SCHEMA_CLEAR_LOGBOOK,
+        )
+    
+    if not hass.services.has_service(DOMAIN, SERVICE_CONTROL_GROUP):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_CONTROL_GROUP,
+            handle_control_group,
+            schema=SCHEMA_CONTROL_GROUP,
+        )
 
 
 async def async_reload_entry(
@@ -115,6 +192,12 @@ async def async_unload_entry(
 
         # Remove the entry from hass.data
         hass.data[DOMAIN].pop(entry.entry_id)
+
+        # Unregister services if no other entries exist
+        if not hass.data[DOMAIN]:
+            hass.services.async_remove(DOMAIN, SERVICE_READ_LOGBOOK)
+            hass.services.async_remove(DOMAIN, SERVICE_CLEAR_LOGBOOK)
+            hass.services.async_remove(DOMAIN, SERVICE_CONTROL_GROUP)
 
         _LOGGER.info(
             "Heytech integration entry %s unloaded successfully", entry.entry_id

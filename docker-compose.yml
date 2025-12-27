@@ -1,0 +1,23 @@
+# Docker Compose configuration for testing Heytech integration
+
+version: '3.8'
+
+services:
+  homeassistant:
+    container_name: homeassistant-heytech-test
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - ./config:/config
+      - ./custom_components:/config/custom_components  # Live code mount
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      - TZ=Europe/Berlin
+    # Optional: Automatisches Logging für Debugging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

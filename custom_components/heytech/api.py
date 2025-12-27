@@ -11,18 +11,57 @@ from asyncio import Queue
 from typing import Any
 
 from custom_components.heytech.parse_helper import (
+    END_SAU,
+    END_SBP,
+    END_SDA,
+    END_SDM,
+    END_SGR,
+    END_SGZ,
+    END_SJP,
     END_SKD,
+    END_SLA,
+    END_SLD,
     END_SMC,
     END_SMN,
     END_SOP,
+    END_SRP,
+    END_SSZ,
+    END_SWP,
+    END_SZN,
+    START_SAU,
+    START_SBP,
+    START_SDA,
+    START_SDM,
+    START_SGR,
+    START_SGZ,
+    START_SJP,
     START_SKD,
+    START_SLA,
+    START_SLD,
     START_SMC,
     START_SMN,
     START_SOP,
+    START_SRP,
+    START_SSZ,
+    START_SWP,
+    START_SZN,
+    parse_sau_automation_status,
+    parse_sbp_shading_params,
+    parse_sda_dusk_params,
+    parse_sdm_dawn_params,
+    parse_sgr_groups_output,
+    parse_sgz_group_control_output,
+    parse_sjp_jalousie_params,
     parse_skd_climate_data,
+    parse_sla_logbook_count,
+    parse_sld_logbook_entry,
     parse_smc_max_channel_output,
     parse_smn_motor_names_output,
     parse_sop_shutter_positions,
+    parse_srp_rain_params,
+    parse_ssz_scenarios_output,
+    parse_swp_wind_params,
+    parse_szn_scenario_names_output,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,6 +124,15 @@ class HeytechApiClient:
         self.shutter_positions: dict[int, int] = {}
         self.shutters: dict[Any, dict[str, int]] = {}
         self.climate_data: dict[str, float] = {}
+        self.scenarios: dict[int, str] = {}  # Scenario number -> name
+        self.groups: dict[int, dict[str, Any]] = {}  # Group number -> {name, channels}
+        self.logbook_entries: list[dict[str, Any]] = []
+        self.logbook_count: int = 0
+        self.automation_status: bool | None = None
+        self.jalousie_params: dict[int, dict[str, Any]] = {}  # Channel -> params
+        self.shading_params: dict[int, dict[str, Any]] = {}  # Channel -> params
+        self.wind_params: dict[int, dict[str, Any]] = {}  # Channel -> params
+        self.rain_params: dict[int, dict[str, Any]] = {}  # Channel -> params
         self._reconnecting = False
         self._discovery_complete: asyncio.Event | None = None
 
@@ -248,6 +296,15 @@ class HeytechApiClient:
             await self.add_command("smn", [])
             await self.add_command("sop", [])
             await self.add_command("skd", [])
+            await self.add_command("szn", [])  # Get scenario names
+            await self.add_command("sau", [])  # Get automation status
+            await self.add_command("sgr", [])  # Get group assignments
+            await self.add_command("sgz", [])  # Get group names
+            await self.add_command("sla", [])  # Get logbook count
+            await self.add_command("sjp", [])  # Get jalousie params (for all channels)
+            await self.add_command("sbp", [])  # Get shading params
+            await self.add_command("swp", [])  # Get wind params
+            await self.add_command("srp", [])  # Get rain params
 
             # Wait for max_channels to be set
             max_wait = 50
@@ -322,6 +379,94 @@ class HeytechApiClient:
             max_wait -= 1
         return self.climate_data
 
+    def get_scenarios(self) -> dict[int, str]:
+        """Return the available scenarios."""
+        return self.scenarios
+
+    async def async_activate_scenario(self, scenario_number: int) -> None:
+        """
+        Activate a scenario by number.
+        
+        :param scenario_number: The scenario number to activate (1-based)
+        """
+        _LOGGER.info("Activating scenario %d", scenario_number)
+        commands = []
+        if self._pin:
+            commands.extend(["rsc\r\n", f"{self._pin}\r\n"])
+        commands.extend([
+            "rsa\r\n",
+            f"{scenario_number}\r\n",
+        ])
+        await self.command_queue.put(commands)
+        if self.connection_task is None or self.connection_task.done():
+            self.connection_task = asyncio.create_task(self._process_commands())
+
+    def get_automation_status(self) -> bool | None:
+        """Return the automation status (external switch state)."""
+        return self.automation_status
+
+    def get_groups(self) -> dict[int, dict[str, Any]]:
+        """Return the available groups."""
+        return self.groups
+
+    async def async_control_group(self, group_number: int, action: str) -> None:
+        """
+        Control a group of shutters.
+        
+        :param group_number: The group number (1-based)
+        :param action: Action to perform ('open', 'close', 'stop', or position 0-100)
+        """
+        _LOGGER.info("Controlling group %d with action %s", group_number, action)
+        group = self.groups.get(group_number)
+        if not group:
+            _LOGGER.warning("Group %d not found", group_number)
+            return
+        
+        channels = group.get("channels", [])
+        if channels:
+            await self.add_command(action, channels)
+        else:
+            _LOGGER.warning("Group %d has no channels assigned", group_number)
+
+    def get_logbook_entries(self) -> list[dict[str, Any]]:
+        """Return the logbook entries."""
+        return self.logbook_entries
+
+    def get_logbook_count(self) -> int:
+        """Return the number of logbook entries."""
+        return self.logbook_count
+
+    async def async_read_logbook(self, max_entries: int = 50) -> list[dict[str, Any]]:
+        """
+        Read logbook entries from the device.
+        
+        :param max_entries: Maximum number of entries to read
+        :return: List of logbook entries
+        """
+        self.logbook_entries = []
+        
+        # Request logbook entries
+        for i in range(1, min(max_entries, self.logbook_count) + 1):
+            commands = [f"sld\r\n", f"{i}\r\n"]
+            await self.command_queue.put(commands)
+        
+        if self.connection_task is None or self.connection_task.done():
+            self.connection_task = asyncio.create_task(self._process_commands())
+        
+        # Wait for entries to be collected
+        await asyncio.sleep(2)
+        return self.logbook_entries
+
+    async def async_clear_logbook(self) -> None:
+        """Clear the logbook on the device."""
+        _LOGGER.info("Clearing logbook")
+        commands = ["sll\r\n"]
+        if self._pin:
+            commands = ["rsc\r\n", f"{self._pin}\r\n"] + commands
+        await self.command_queue.put(commands)
+        if self.connection_task is None or self.connection_task.done():
+            self.connection_task = asyncio.create_task(self._process_commands())
+
     def _raise_communication_error(self, message: str) -> None:
         """Raise a communication error with the given message."""
         raise IntegrationHeytechApiClientCommunicationError(message)
@@ -337,9 +482,10 @@ class HeytechApiClient:
                 await self.connect()
             await self._add_periodic_command("sop", [])
 
-            # Check if it's time to send 'skd'
+            # Check if it's time to send 'skd' and 'sau'
             if now - last_skd >= SKD_INTERVAL and self.connected:
                 await self._add_periodic_command("skd", [])
+                await self._add_periodic_command("sau", [])
                 last_skd = asyncio.get_event_loop().time()
 
     async def _process_commands(self) -> None:
@@ -421,6 +567,59 @@ class HeytechApiClient:
                     self.max_channels = parse_smc_max_channel_output(line)
                 elif START_SKD in line and END_SKD in line:
                     self.climate_data = parse_skd_climate_data(line)
+                elif START_SZN in line and END_SZN in line:
+                    one_scenario = parse_szn_scenario_names_output(line)
+                    self.scenarios = {**self.scenarios, **one_scenario}
+                elif START_SAU in line and END_SAU in line:
+                    self.automation_status = parse_sau_automation_status(line)
+                elif START_SGR in line and END_SGR in line:
+                    # Parse group channel assignments
+                    group_channels = parse_sgr_groups_output(line)
+                    for group_num, channels in group_channels.items():
+                        if group_num not in self.groups:
+                            self.groups[group_num] = {"channels": channels}
+                        else:
+                            self.groups[group_num]["channels"] = channels
+                elif START_SGZ in line and END_SGZ in line:
+                    # Parse group names
+                    group_names = parse_sgz_group_control_output(line)
+                    for group_num, name in group_names.items():
+                        if group_num not in self.groups:
+                            self.groups[group_num] = {"name": name}
+                        else:
+                            self.groups[group_num]["name"] = name
+                elif START_SLD in line and END_SLD in line:
+                    # Parse logbook entry
+                    entry = parse_sld_logbook_entry(line)
+                    if entry:
+                        self.logbook_entries.append(entry)
+                elif START_SLA in line and END_SLA in line:
+                    # Parse logbook count
+                    self.logbook_count = parse_sla_logbook_count(line)
+                elif START_SJP in line and END_SJP in line:
+                    # Parse jalousie parameters
+                    params = parse_sjp_jalousie_params(line)
+                    if params:
+                        channel = params.pop("channel")
+                        self.jalousie_params[channel] = params
+                elif START_SBP in line and END_SBP in line:
+                    # Parse shading parameters
+                    params = parse_sbp_shading_params(line)
+                    if params:
+                        channel = params.pop("channel")
+                        self.shading_params[channel] = params
+                elif START_SWP in line and END_SWP in line:
+                    # Parse wind parameters
+                    params = parse_swp_wind_params(line)
+                    if params:
+                        channel = params.pop("channel")
+                        self.wind_params[channel] = params
+                elif START_SRP in line and END_SRP in line:
+                    # Parse rain parameters
+                    params = parse_srp_rain_params(line)
+                    if params:
+                        channel = params.pop("channel")
+                        self.rain_params[channel] = params
             except asyncio.CancelledError as e:
                 _LOGGER.debug("Read task cancelled: %s", e)
                 await self.disconnect()

@@ -21,6 +21,21 @@ This is a custom integration for [Home Assistant](https://www.home-assistant.io/
 - Control Heytech shutters directly from Home Assistant.
 - Add and manage shutters dynamically through the Home Assistant interface.
 - Seamless integration with Home Assistant's `Cover` platform.
+- **NEW:** Scene support - Activate predefined scenarios from your Heytech controller.
+- **NEW:** Group control - Control multiple shutters as a group with dedicated cover entities.
+- **NEW:** Extended sensors:
+  - Wind speed (current and maximum)
+  - Rain status (binary sensor)
+  - Alarm status (binary sensor)
+  - Brightness with automatic lux conversion
+  - Indoor/outdoor temperature
+  - Relative humidity
+  - Automation status (external automation switch state)
+  - Logbook entry count
+- **NEW:** Services:
+  - `heytech.read_logbook` - Read logbook entries from the controller
+  - `heytech.clear_logbook` - Clear all logbook entries
+  - `heytech.control_group` - Control shutter groups programmatically
 
 ---
 
@@ -69,6 +84,62 @@ No manual YAML configuration is required, but the integration adds entities auto
 - `cover.bedroom_shutter`
 
 You can control these shutters via Home Assistant UI, automations, or scripts.
+
+---
+
+## Services
+
+The integration provides several services for advanced control:
+
+### `heytech.read_logbook`
+Read logbook entries from the Heytech controller.
+
+**Parameters:**
+- `max_entries` (optional, default: 50): Maximum number of entries to read
+
+**Example:**
+```yaml
+service: heytech.read_logbook
+data:
+  max_entries: 100
+```
+
+This service fires a `heytech_logbook_read` event with the logbook data that you can use in automations.
+
+### `heytech.clear_logbook`
+Clear all logbook entries on the Heytech controller.
+
+**Example:**
+```yaml
+service: heytech.clear_logbook
+```
+
+### `heytech.control_group`
+Control a group of shutters programmatically.
+
+**Parameters:**
+- `group_number` (required): The group number (1-8)
+- `action` (required): Action to perform ('open', 'close', 'stop', or position 0-100)
+
+**Example:**
+```yaml
+service: heytech.control_group
+data:
+  group_number: 1
+  action: "open"
+```
+
+---
+
+## Groups
+
+Groups configured on your Heytech controller are automatically discovered and added as separate cover entities. Each group can control multiple shutters simultaneously.
+
+---
+
+## Scenes
+
+Scenarios configured on your Heytech controller are automatically discovered and added as scene entities. Simply activate a scene to apply the predefined shutter positions.
 
 ---
 

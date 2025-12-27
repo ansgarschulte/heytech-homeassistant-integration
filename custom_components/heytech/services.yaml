@@ -1,0 +1,43 @@
+# Services for Heytech integration
+
+read_logbook:
+  name: Read Logbook
+  description: Read logbook entries from the Heytech controller
+  fields:
+    max_entries:
+      name: Maximum Entries
+      description: Maximum number of logbook entries to read
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box
+
+clear_logbook:
+  name: Clear Logbook
+  description: Clear all logbook entries on the Heytech controller
+
+control_group:
+  name: Control Group
+  description: Control a group of shutters
+  fields:
+    group_number:
+      name: Group Number
+      description: The group number to control (1-8)
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 8
+          mode: box
+    action:
+      name: Action
+      description: Action to perform (open, close, stop, or position 0-100)
+      required: true
+      selector:
+        select:
+          options:
+            - "open"
+            - "close"
+            - "stop"
