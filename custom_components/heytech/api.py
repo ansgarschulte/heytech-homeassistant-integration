@@ -559,7 +559,8 @@ class HeytechApiClient:
                     one_shutter = parse_smn_motor_names_output(line)
                     
                     # Check if this is a scenario (channel >= 65) or a regular shutter
-                    for channel, name in one_shutter.items():
+                    for name, data in one_shutter.items():
+                        channel = data["channel"]
                         if channel >= 65:
                             # This is a scenario, not a shutter
                             scenario_num = channel - 64  # Scenarios start at 1
