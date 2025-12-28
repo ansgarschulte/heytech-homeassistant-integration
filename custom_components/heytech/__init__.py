@@ -186,17 +186,17 @@ async def async_setup_services(
             "exported_at": hass.helpers.template.now().isoformat(),
             "shutters": shutters,
         }
-        
+
         # Save to file in Home Assistant's config directory
         import os
         filepath = os.path.join(hass.config.path(), f"{filename}.json")
-        
+
         try:
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, indent=2, ensure_ascii=False)
-            
+
             _LOGGER.info("Exported %d custom shutters to %s", len(shutters), filepath)
-            
+
             # Show persistent notification with export location
             await hass.services.async_call(
                 "persistent_notification",
@@ -212,7 +212,7 @@ async def async_setup_services(
                     "notification_id": "heytech_export_success",
                 },
             )
-            
+
             # Fire success event
             hass.bus.async_fire(
                 "heytech_config_exported",
@@ -224,7 +224,7 @@ async def async_setup_services(
             )
         except Exception as e:  # noqa: BLE001
             _LOGGER.error("Failed to export configuration: %s", e)
-            
+
             # Show error notification
             await hass.services.async_call(
                 "persistent_notification",
@@ -239,7 +239,7 @@ async def async_setup_services(
                     "notification_id": "heytech_export_failed",
                 },
             )
-            
+
             hass.bus.async_fire(
                 "heytech_config_export_failed",
                 {"error": str(e)},
@@ -249,11 +249,11 @@ async def async_setup_services(
         """Handle the import_shutters_config service call."""
         config_data = call.data["config_data"]
         _LOGGER.info("Importing shutters configuration")
-        
+
         try:
             # Parse JSON data
             import_data = json.loads(config_data)
-            
+
             if "shutters" not in import_data:
                 _LOGGER.error("Invalid config data: missing 'shutters' key")
                 hass.bus.async_fire(
@@ -261,28 +261,28 @@ async def async_setup_services(
                     {"error": "Invalid config data: missing 'shutters' key"},
                 )
                 return
-            
+
             shutters = import_data["shutters"]
-            
+
             # Get the config entry
             entries = hass.config_entries.async_entries(DOMAIN)
             if not entries:
                 _LOGGER.error("No Heytech config entries found")
                 return
-            
+
             entry = entries[0]
-            
+
             # Update the config entry with imported shutters
             new_options = {**entry.options, CONF_SHUTTERS: shutters}
             hass.config_entries.async_update_entry(entry, options=new_options)
-            
+
             # Fire success event
             hass.bus.async_fire(
                 "heytech_config_imported",
                 {"shutters_count": len(shutters)},
             )
             _LOGGER.info("Imported %d custom shutters successfully", len(shutters))
-            
+
         except json.JSONDecodeError as e:
             _LOGGER.error("Failed to parse JSON: %s", e)
             hass.bus.async_fire(
@@ -290,28 +290,31 @@ async def async_setup_services(
                 {"error": f"Invalid JSON: {e}"},
             )
 
-    async def handle_sync_time(call: ServiceCall) -> None:
+    async def handle_sync_time(_call: ServiceCall) -> None:
         """Handle the sync_time service call."""
         _LOGGER.info("Synchronizing time with Heytech controller")
         try:
             await api_client.async_sync_time()
             _LOGGER.info("Time synchronized successfully")
-            
+
             # Show success notification
             await hass.services.async_call(
                 "persistent_notification",
                 "create",
                 {
-                    "message": "Time synchronized successfully with Heytech controller.",
+                    "message": (
+                        "Time synchronized successfully "
+                        "with Heytech controller."
+                    ),
                     "title": "Heytech Time Sync",
                     "notification_id": "heytech_time_sync_success",
                 },
             )
-            
+
             hass.bus.async_fire("heytech_time_synced")
         except Exception as e:  # noqa: BLE001
             _LOGGER.error("Failed to sync time: %s", e)
-            
+
             # Show error notification
             await hass.services.async_call(
                 "persistent_notification",
@@ -322,7 +325,7 @@ async def async_setup_services(
                     "notification_id": "heytech_time_sync_failed",
                 },
             )
-            
+
             hass.bus.async_fire(
                 "heytech_time_sync_failed",
                 {"error": str(e)},
@@ -331,9 +334,12 @@ async def async_setup_services(
     # Register services only once
     if not hass.services.has_service(DOMAIN, SERVICE_READ_LOGBOOK):
         hass.services.async_register(
-            DOMAIN, SERVICE_READ_LOGBOOK, handle_read_logbook, schema=SCHEMA_READ_LOGBOOK
+            DOMAIN,
+            SERVICE_READ_LOGBOOK,
+            handle_read_logbook,
+            schema=SCHEMA_READ_LOGBOOK,
         )
-    
+
     if not hass.services.has_service(DOMAIN, SERVICE_CLEAR_LOGBOOK):
         hass.services.async_register(
             DOMAIN,
@@ -341,7 +347,7 @@ async def async_setup_services(
             handle_clear_logbook,
             schema=SCHEMA_CLEAR_LOGBOOK,
         )
-    
+
     if not hass.services.has_service(DOMAIN, SERVICE_CONTROL_GROUP):
         hass.services.async_register(
             DOMAIN,
@@ -349,7 +355,7 @@ async def async_setup_services(
             handle_control_group,
             schema=SCHEMA_CONTROL_GROUP,
         )
-    
+
     if not hass.services.has_service(DOMAIN, SERVICE_EXPORT_SHUTTERS):
         hass.services.async_register(
             DOMAIN,
@@ -357,7 +363,7 @@ async def async_setup_services(
             handle_export_shutters,
             schema=SCHEMA_EXPORT_SHUTTERS,
         )
-    
+
     if not hass.services.has_service(DOMAIN, SERVICE_IMPORT_SHUTTERS):
         hass.services.async_register(
             DOMAIN,
@@ -365,7 +371,7 @@ async def async_setup_services(
             handle_import_shutters,
             schema=SCHEMA_IMPORT_SHUTTERS,
         )
-    
+
     if not hass.services.has_service(DOMAIN, SERVICE_SYNC_TIME):
         hass.services.async_register(
             DOMAIN,
@@ -396,7 +402,7 @@ async def async_unload_entry(
             try:
                 await api_client.stop()
                 _LOGGER.debug("API client stopped successfully.")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Error stopping API client")
 
         # Remove the entry from hass.data

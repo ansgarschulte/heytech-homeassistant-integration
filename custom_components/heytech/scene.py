@@ -34,10 +34,10 @@ async def async_setup_entry(
     # The coordinator runs async_read_heytech_data() which discovers scenarios
     # This happens in parallel with platform setup, so we need to wait
     await asyncio.sleep(2)  # Give discovery time to complete
-    
+
     # Fetch scenarios from the API
     scenarios = api_client.get_scenarios()
-    
+
     if not scenarios:
         _LOGGER.warning("No scenarios found on Heytech device - will retry discovery")
         # Trigger another discovery attempt
@@ -47,7 +47,7 @@ async def async_setup_entry(
             scenarios = api_client.get_scenarios()
         except Exception:
             _LOGGER.exception("Failed to discover scenarios")
-    
+
     if not scenarios:
         _LOGGER.warning("Still no scenarios found after retry")
         return
@@ -86,15 +86,19 @@ class HeytechScene(Scene):
     def device_info(self) -> dict[str, Any]:
         """Return device information about this scene."""
         return {
-            "identifiers": {(DOMAIN, f"heytech_scenarios")},
+            "identifiers": {(DOMAIN, "heytech_scenarios")},
             "name": "Heytech Scenarios",
             "manufacturer": "Heytech",
             "model": "Scenario Controller",
         }
 
-    async def async_activate(self, **kwargs: Any) -> None:
+    async def async_activate(self, **_kwargs: Any) -> None:
         """Activate the scene."""
-        _LOGGER.info("Activating scenario '%s' (number %d)", self._name, self._scenario_number)
+        _LOGGER.info(
+            "Activating scenario '%s' (number %d)",
+            self._name,
+            self._scenario_number,
+        )
         try:
             await self._api_client.async_activate_scenario(self._scenario_number)
         except IntegrationHeytechApiClientError:

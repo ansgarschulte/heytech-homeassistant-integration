@@ -365,7 +365,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             "Cover '%s' update: all positions=%s, channels=%s",
             self._name, positions, self._channels
         )
-        
+
         # Get new position from controller
         new_position = None
         if self._channels:
@@ -383,20 +383,20 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
                     "Cover '%s' channels %s: positions from controller %s, calculated new_position=%s, current position=%s, is_moving=%s",
                     self._name, self._channels, channel_positions, new_position, self._position, (self._is_opening or self._is_closing)
                 )
-        
+
         # Always update position from controller
         # The controller is the source of truth
         if new_position is not None:
             position_changed = self._position != new_position
             self._prev_position = self._position
             self._position = new_position
-            
+
             # If position hasn't changed, movement has stopped
             if not position_changed and (self._is_opening or self._is_closing):
                 _LOGGER.debug("Cover '%s' movement stopped at position %s", self._name, self._position)
                 self._is_opening = False
                 self._is_closing = False
-        
+
         self.async_write_ha_state()
 
 

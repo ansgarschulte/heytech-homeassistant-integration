@@ -16,9 +16,6 @@ from custom_components.heytech.parse_helper import (
     END_RZN,
     END_SAU,
     END_SBP,
-    END_SDA,
-    END_SDM,
-    END_SGR,
     END_SJP,
     END_SKD,
     END_SLA,
@@ -27,16 +24,12 @@ from custom_components.heytech.parse_helper import (
     END_SMN,
     END_SOP,
     END_SRP,
-    END_SSZ,
     END_SWP,
     END_SZN,
     START_RGZ,
     START_RZN,
     START_SAU,
     START_SBP,
-    START_SDA,
-    START_SDM,
-    START_SGR,
     START_SJP,
     START_SKD,
     START_SLA,
@@ -45,14 +38,11 @@ from custom_components.heytech.parse_helper import (
     START_SMN,
     START_SOP,
     START_SRP,
-    START_SSZ,
     START_SWP,
     START_SZN,
     parse_rgz_group_assignments,
     parse_sau_automation_status,
     parse_sbp_shading_params,
-    parse_sda_dusk_params,
-    parse_sdm_dawn_params,
     parse_sgz_group_control_output,
     parse_sjp_jalousie_params,
     parse_skd_climate_data,
@@ -62,7 +52,6 @@ from custom_components.heytech.parse_helper import (
     parse_smn_motor_names_output,
     parse_sop_shutter_positions,
     parse_srp_rain_params,
-    parse_ssz_scenarios_output,
     parse_swp_wind_params,
     parse_szn_scenario_names_output,
 )
@@ -162,7 +151,7 @@ class HeytechApiClient:
                 _LOGGER.debug(
                     "Connected to Heytech device at %s:%s", self.host, self.port
                 )
-                
+
                 # Initialize controller (required after boot/restart)
                 # Send RHI (Hand-Steuerung Initialisierung) + RHE sequence
                 await self._send_initialization_sequence()
@@ -187,7 +176,7 @@ class HeytechApiClient:
         """
         if not self.writer:
             return
-            
+
         try:
             _LOGGER.info("Sending controller initialization sequence (RHI/RHE)")
             init_commands = [
@@ -196,12 +185,12 @@ class HeytechApiClient:
                 "rhe\r\n",  # Hand-Steuerung exit
                 "\r\n",
             ]
-            
+
             for cmd in init_commands:
                 self.writer.write(cmd.encode("utf-8"))
                 await self.writer.drain()
                 await asyncio.sleep(0.05)  # Small delay between commands
-                
+
             _LOGGER.debug("Controller initialization sequence sent successfully")
         except Exception:
             _LOGGER.exception("Failed to send initialization sequence")
@@ -333,9 +322,10 @@ class HeytechApiClient:
             self.scenarios = {}
             self.max_channels = None
             self._discovery_complete = asyncio.Event()
-            
+
             await self.add_command("smc", [])
-            await self.add_command("smn", [])  # Controller auto-iterates ALL channels including scenarios!
+            # Controller auto-iterates ALL channels including scenarios
+            await self.add_command("smn", [])
             await self.add_command("sop", [])
             await self.add_command("skd", [])
             await self.add_command("sau", [])  # Get automation status
@@ -351,14 +341,16 @@ class HeytechApiClient:
             while not self.max_channels and max_wait > 0:
                 await asyncio.sleep(0.1)
                 max_wait -= 1
-            
+
             if not self.max_channels:
-                _LOGGER.warning("Failed to retrieve max_channels, falling back to timeout")
+                _LOGGER.warning(
+                    "Failed to retrieve max_channels, falling back to timeout"
+                )
                 # Fallback: wait for stable count
                 stable_cycles = 0
                 last_count = -1
                 max_stable_cycles = 15
-                
+
                 while stable_cycles < max_stable_cycles:
                     await asyncio.sleep(0.2)
                     if len(self.shutters) == last_count:
@@ -370,7 +362,7 @@ class HeytechApiClient:
                 # Event-based: wait until all shutters discovered or timeout
                 try:
                     await asyncio.wait_for(
-                        self._discovery_complete.wait(), 
+                        self._discovery_complete.wait(),
                         timeout=10.0
                     )
                     _LOGGER.debug(
@@ -378,13 +370,14 @@ class HeytechApiClient:
                         len(self.shutters),
                         self.max_channels
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     _LOGGER.warning(
-                        "Discovery timeout: found %d shutters, expected up to %d channels",
+                        "Discovery timeout: found %d shutters, "
+                        "expected up to %d channels",
                         len(self.shutters),
-                        self.max_channels
+                        self.max_channels,
                     )
-            
+
             if not self.shutters:
                 self._raise_communication_error("Failed to retrieve shutters data")
             await self.async_read_shutters_positions()
@@ -461,7 +454,7 @@ class HeytechApiClient:
         if not group:
             _LOGGER.warning("Group %d not found", group_number)
             return
-        
+
         channels = group.get("channels", [])
         if channels:
             await self.add_command(action, channels)
@@ -484,15 +477,15 @@ class HeytechApiClient:
         :return: List of logbook entries
         """
         self.logbook_entries = []
-        
+
         # Request logbook entries
         for i in range(1, min(max_entries, self.logbook_count) + 1):
-            commands = [f"sld\r\n", f"{i}\r\n"]
+            commands = ["sld\r\n", f"{i}\r\n"]
             await self.command_queue.put(commands)
-        
+
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
-        
+
         # Wait for entries to be collected
         await asyncio.sleep(2)
         return self.logbook_entries
@@ -510,22 +503,22 @@ class HeytechApiClient:
     async def async_sync_time(self) -> None:
         """Synchronize date and time with the controller."""
         now = datetime.now()
-        
+
         # Format: rdt followed by: day,month,year,hour,minute,second,weekday
         # Weekday: 1=Monday, 7=Sunday
         weekday = now.isoweekday()  # 1=Monday, 7=Sunday
-        
+
         time_data = (
             f"{now.day},{now.month},{now.year % 100},"
             f"{now.hour},{now.minute},{now.second},{weekday}"
         )
-        
+
         _LOGGER.info("Syncing time: %s", time_data)
-        
+
         commands = [f"rdt{time_data}\r\n"]
         if self._pin:
             commands = ["rsc\r\n", f"{self._pin}\r\n"] + commands
-        
+
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
@@ -589,14 +582,14 @@ class HeytechApiClient:
                     if self.writer:
                         for command in commands:
                             _LOGGER.debug(
-                                "Sending %s command: %s", 
+                                "Sending %s command: %s",
                                 "USER" if is_user_command else "periodic",
                                 command.strip()
                             )
                             self.writer.write(command.encode("ascii"))
                             await self.writer.drain()
                             self.last_activity = asyncio.get_event_loop().time()
-                            
+
                             # Shorter delay for user commands = more responsive!
                             if is_user_command:
                                 await asyncio.sleep(0.02)  # 20ms for user commands
@@ -662,7 +655,7 @@ class HeytechApiClient:
 
                     # Signal discovery complete when all channels processed
                     if (self._discovery_complete
-                        and self.max_channels 
+                        and self.max_channels
                         and len(self.shutters) >= self.max_channels):
                         self._discovery_complete.set()
                 elif START_SMC in line and END_SMC in line:

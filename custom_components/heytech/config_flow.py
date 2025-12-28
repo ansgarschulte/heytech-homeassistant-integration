@@ -387,7 +387,7 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         }
 
         export_json = json.dumps(export_data, indent=2)
-        
+
         # Show JSON in a text field for copying
         return self.async_show_form(
             step_id="export_config",
@@ -409,12 +409,12 @@ class HeytechOptionsFlowHandler(OptionsFlow):
     ) -> data_entry_flow.FlowResult:
         """Import shutters configuration."""
         errors: dict[str, str] = {}
-        
+
         if user_input is not None:
             try:
                 # Parse JSON data
                 import_data = json.loads(user_input["config_data"])
-                
+
                 if "shutters" not in import_data:
                     errors["config_data"] = "invalid_format"
                 else:
@@ -426,10 +426,10 @@ class HeytechOptionsFlowHandler(OptionsFlow):
                         # Merge imported shutters with existing ones
                         self._shutters.update(shutters)
                         return await self.async_step_shutter_menu()
-                        
+
             except json.JSONDecodeError:
                 errors["config_data"] = "invalid_json"
-        
+
         return self.async_show_form(
             step_id="import_config",
             data_schema=vol.Schema(

@@ -201,7 +201,7 @@ def parse_szn_scenario_names_output(line: str) -> dict[int, str]:
     SZN is the send command, RZN is receive.
     """
     scenarios = {}
-    
+
     # Try RZN first (correct receive command)
     if START_RZN in line and END_RZN in line:
         match = re.match(r"start_rzn(\d+),(.+?),(\d+),ende_rzn", line)
@@ -218,7 +218,7 @@ def parse_szn_scenario_names_output(line: str) -> dict[int, str]:
             name = match.group(2).strip()
             scenarios[scenario_num] = name
             _LOGGER.debug("Parsed scenario %d: '%s' (via SZN)", scenario_num, name)
-    
+
     return scenarios
 
 
@@ -235,12 +235,12 @@ def parse_ssz_scenarios_output(line: str) -> dict[int, dict[str, Any]]:
         start_index = line.find(START_SSZ) + len(START_SSZ)
         end_index = line.rfind(END_SSZ)
         data_str = line[start_index:end_index]
-        
+
         parts = data_str.split(",")
         if len(parts) > 0:
             try:
                 scenario_num = int(parts[0])
-                positions = [int(p) if p.strip().isdigit() else None 
+                positions = [int(p) if p.strip().isdigit() else None
                            for p in parts[1:]]
                 scenarios[scenario_num] = {
                     "positions": positions
@@ -281,13 +281,13 @@ def parse_rgz_group_assignments(line: str) -> dict[int, list[int]]:
         start_index = line.find(START_RGZ) + len(START_RGZ)
         end_index = line.rfind(END_RGZ)
         data_str = line[start_index:end_index]
-        
+
         parts = data_str.split(",")
         if len(parts) > 0:
             try:
                 group_num = int(parts[0])
                 # Filter out 0 values (inactive channels)
-                channels = [int(ch) for ch in parts[1:] if ch.strip() and ch.strip() != '0' and int(ch) > 0]
+                channels = [int(ch) for ch in parts[1:] if ch.strip() and ch.strip() != "0" and int(ch) > 0]
                 if channels:  # Only add if group has channels
                     groups[group_num] = channels
                     _LOGGER.debug("Parsed group %d with channels %s", group_num, channels)
@@ -324,11 +324,11 @@ def parse_sgz_group_control_output(line: str) -> dict[int, dict[str, Any]]:
             start_index = line.find("start_sgz") + len("start_sgz")
             end_index = line.rfind("ende_sgz")
             data_str = line[start_index:end_index]
-            
+
             parts = data_str.split(",")
             if len(parts) >= 2:
                 group_num = int(parts[0])
-                
+
                 # Parse bitmasks to extract channel numbers
                 channels = []
                 for i, bitmask_str in enumerate(parts[1:]):
@@ -345,14 +345,14 @@ def parse_sgz_group_control_output(line: str) -> dict[int, dict[str, Any]]:
                                 channels.append(channel)
                     except ValueError:
                         continue
-                
+
                 if channels:
                     name = f"Group {group_num}"
                     group_info[group_num] = {
                         "name": name,
                         "channels": channels
                     }
-                    _LOGGER.debug("Parsed SGZ group %d: name='%s', channels=%s", 
+                    _LOGGER.debug("Parsed SGZ group %d: name='%s', channels=%s",
                                  group_num, name, channels)
         except (ValueError, IndexError) as e:
             _LOGGER.warning("Failed to parse SGZ data: %s, error: %s", line, e)
@@ -371,7 +371,7 @@ def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
         start_index = line.find(START_SLD) + len(START_SLD)
         end_index = line.rfind(END_SLD)
         data_str = line[start_index:end_index]
-        
+
         # Logbook format: Nr;Motor/Raum;Datum;Uhrzeit;Richtung;Ausgelöst
         parts = data_str.split(";")
         if len(parts) >= 6:
@@ -414,7 +414,7 @@ def parse_sjp_jalousie_params(line: str) -> dict[str, Any] | None:
         start_index = line.find(START_SJP) + len(START_SJP)
         end_index = line.rfind(END_SJP)
         data_str = line[start_index:end_index]
-        
+
         parts = data_str.split(",")
         if len(parts) >= 4:
             try:
@@ -439,7 +439,7 @@ def parse_sfs_fixed_schedule(line: str) -> dict[str, Any] | None:
         start_index = line.find(START_SFS) + len(START_SFS)
         end_index = line.rfind(END_SFS)
         data_str = line[start_index:end_index]
-        
+
         parts = data_str.split(",")
         if len(parts) >= 6:
             try:
@@ -467,7 +467,7 @@ def parse_sbp_shading_params(line: str) -> dict[str, Any] | None:
         start_index = line.find(START_SBP) + len(START_SBP)
         end_index = line.rfind(END_SBP)
         data_str = line[start_index:end_index]
-        
+
         parts = data_str.split(",")
         if len(parts) >= 4:
             try:
@@ -492,7 +492,7 @@ def parse_automation_params(line: str, start_marker: str, end_marker: str) -> di
         start_index = line.find(start_marker) + len(start_marker)
         end_index = line.rfind(end_marker)
         data_str = line[start_index:end_index]
-        
+
         parts = data_str.split(",")
         if len(parts) >= 4:
             try:

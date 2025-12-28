@@ -77,21 +77,23 @@ async def async_setup_entry(
         else:
             entity = HeytechTemperatureSensor(coordinator, name, unique_id)
         entities.append(entity)
-    
+
     # Add automation status sensor
     automation_unique_id = f"{entry.entry_id}_automation_status"
     current_unique_ids.add(automation_unique_id)
     entities.append(
-        HeytechAutomationStatusSensor(coordinator, "automation_status", automation_unique_id)
+        HeytechAutomationStatusSensor(
+            coordinator, "automation_status", automation_unique_id
+        )
     )
-    
+
     # Add logbook count sensor
     logbook_unique_id = f"{entry.entry_id}_logbook_count"
     current_unique_ids.add(logbook_unique_id)
     entities.append(
         HeytechLogbookCountSensor(coordinator, "logbook_count", logbook_unique_id)
     )
-    
+
     async_add_entities(entities)
 
     # Remove entities and devices that are no longer in the configuration
@@ -355,9 +357,7 @@ class HeytechLogbookCountSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> int | None:
-        """
-        Return the logbook entry count.
-        """
+        """Return the logbook entry count."""
         value = self.coordinator.data.get("logbook_count")
         _LOGGER.debug("Logbook count sensor has value %s", value)
         return int(value) if value is not None else 0

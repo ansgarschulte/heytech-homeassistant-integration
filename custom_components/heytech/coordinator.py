@@ -61,7 +61,7 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             climate_data = self.api_client.get_climate_data()
             automation_status = self.api_client.get_automation_status()
             logbook_count = self.api_client.get_logbook_count()
-            
+
             if not positions:
                 _LOGGER.warning("No shutter positions received.")
             if not climate_data:
