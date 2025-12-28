@@ -10,7 +10,9 @@ Jede Änderung in `custom_components/heytech/` ist sofort im Container.
 docker-compose up -d
 ```
 
-Warte 1 Minute, dann öffne: **http://localhost:8123**
+Warte ~30 Sekunden, dann öffne: **http://localhost:8123**
+
+⚠️ **Beim ersten Start**: Erstelle einen Admin-Account!
 
 ## 2. Code ändern
 
