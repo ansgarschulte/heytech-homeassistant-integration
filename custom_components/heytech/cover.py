@@ -73,8 +73,8 @@ async def async_setup_entry(
         CONF_SHUTTERS, entry.data.get(CONF_SHUTTERS, {})
     )
 
-    # Merge configured shutters with normalized and limited dynamic shutters
-    all_shutters = {**configured_shutters, **normalized_dynamic_shutters}
+    # Merge dynamic shutters with configured shutters (both are kept)
+    all_shutters = {**normalized_dynamic_shutters, **configured_shutters}
 
     covers = []
     current_unique_ids: set[str] = set()
@@ -246,8 +246,8 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
                 "Cover '%s' position is unknown. Assuming not closed.", self._name
             )
             return False  # Unknown state
-        if self._is_awning:
-            return self._position == MAX_POSITION
+        # For Heytech: position 0 = closed, position 100 = open
+        # So is_closed is True when position is at minimum (0)
         return self._position == MIN_POSITION
 
     @property
@@ -296,20 +296,16 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
     async def async_open_cover(self, **_kwargs: Any) -> None:
         """Open the cover."""
         _LOGGER.info("Opening %s on channels %s", self._name, self._channels)
-        if self._is_awning:
-            await self.async_set_cover_position(position=MIN_POSITION)
-        else:
-            await self.async_set_cover_position(position=MAX_POSITION)
+        # For Heytech: position 100 = open
+        await self.async_set_cover_position(position=MAX_POSITION)
         self._is_opening = True
         self.async_write_ha_state()
 
     async def async_close_cover(self, **_kwargs: Any) -> None:
         """Close the cover."""
         _LOGGER.info("Closing %s on channels %s", self._name, self._channels)
-        if self._is_awning:
-            await self.async_set_cover_position(position=MAX_POSITION)
-        else:
-            await self.async_set_cover_position(position=MIN_POSITION)
+        # For Heytech: position 0 = closed
+        await self.async_set_cover_position(position=MIN_POSITION)
         self._is_closing = True
         self.async_write_ha_state()
 
@@ -364,11 +360,15 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
 
     def _handle_coordinator_update(self) -> None:
         """Update the cover's state from the coordinator."""
-        self._prev_position = self._position
         positions = self.coordinator.data.get("shutter_positions", {})
-        if not self._channels:
-            self._position = None
-        else:
+        _LOGGER.debug(
+            "Cover '%s' update: all positions=%s, channels=%s",
+            self._name, positions, self._channels
+        )
+        
+        # Get new position from controller
+        new_position = None
+        if self._channels:
             # Collect positions for all associated channels
             channel_positions = [
                 positions.get(channel, None) for channel in self._channels
@@ -378,17 +378,25 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             if channel_positions:
                 # If multiple channels, decide how to represent the position
                 # Here, we take the average position
-                self._position = sum(channel_positions) // len(channel_positions)
-            else:
-                self._position = None
-
-        if self._position is not None and self._prev_position is not None:
-            if self._position == self._prev_position:
+                new_position = sum(channel_positions) // len(channel_positions)
+                _LOGGER.debug(
+                    "Cover '%s' channels %s: positions from controller %s, calculated new_position=%s, current position=%s, is_moving=%s",
+                    self._name, self._channels, channel_positions, new_position, self._position, (self._is_opening or self._is_closing)
+                )
+        
+        # Always update position from controller
+        # The controller is the source of truth
+        if new_position is not None:
+            position_changed = self._position != new_position
+            self._prev_position = self._position
+            self._position = new_position
+            
+            # If position hasn't changed, movement has stopped
+            if not position_changed and (self._is_opening or self._is_closing):
+                _LOGGER.debug("Cover '%s' movement stopped at position %s", self._name, self._position)
                 self._is_opening = False
                 self._is_closing = False
-        else:
-            self._is_opening = False
-            self._is_closing = False
+        
         self.async_write_ha_state()
 
 

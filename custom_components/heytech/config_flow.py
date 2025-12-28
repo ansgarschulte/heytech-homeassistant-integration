@@ -285,6 +285,13 @@ class HeytechOptionsFlowHandler(OptionsFlow):
                 return await self._show_add_shutter_form(user_input, errors)
             # Add shutter to shutters dict
             self._shutters[self._shutter_name] = self._shutter_channels
+            # Save changes immediately
+            self.hass.config_entries.async_update_entry(
+                self._config_entry,
+                options={**self._config_entry.options, CONF_SHUTTERS: self._shutters},
+            )
+            # Reload the integration to apply changes
+            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
             # Ask if the user wants to add another shutter
             if user_input.get("add_another"):
                 return await self.async_step_add_shutter()
@@ -336,6 +343,13 @@ class HeytechOptionsFlowHandler(OptionsFlow):
             shutter_to_remove = user_input["shutter"]
             if shutter_to_remove in self._shutters:
                 del self._shutters[shutter_to_remove]
+                # Save changes immediately
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry,
+                    options={**self._config_entry.options, CONF_SHUTTERS: self._shutters},
+                )
+                # Reload the integration to apply changes
+                await self.hass.config_entries.async_reload(self._config_entry.entry_id)
                 return await self.async_step_shutter_menu()
             errors["shutter"] = "shutter_not_found"
         data_schema = vol.Schema(
@@ -371,12 +385,18 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         
         export_json = json.dumps(export_data, indent=2)
         
-        # Show export data to user
+        # Show JSON in a text field for copying
         return self.async_show_form(
             step_id="export_config",
-            data_schema=vol.Schema({}),
+            data_schema=vol.Schema({
+                vol.Optional("export_data", default=export_json): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.TEXT,
+                        multiline=True,
+                    ),
+                ),
+            }),
             description_placeholders={
-                "config_data": export_json,
                 "count": str(len(self._shutters)),
             },
         )

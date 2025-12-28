@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall
 
-PLATFORMS: list[Platform] = [Platform.COVER, Platform.SENSOR, Platform.SCENE]
+PLATFORMS: list[Platform] = [Platform.COVER, Platform.SENSOR, Platform.SCENE, Platform.BUTTON]
 _LOGGER = logging.getLogger(__name__)
 
 # Service schemas
@@ -33,6 +33,7 @@ SERVICE_CLEAR_LOGBOOK = "clear_logbook"
 SERVICE_CONTROL_GROUP = "control_group"
 SERVICE_EXPORT_SHUTTERS = "export_shutters_config"
 SERVICE_IMPORT_SHUTTERS = "import_shutters_config"
+SERVICE_SYNC_TIME = "sync_time"
 
 SCHEMA_READ_LOGBOOK = vol.Schema(
     {
@@ -60,6 +61,8 @@ SCHEMA_IMPORT_SHUTTERS = vol.Schema(
         vol.Required("config_data"): cv.string,
     }
 )
+
+SCHEMA_SYNC_TIME = vol.Schema({})
 
 
 async def async_setup_entry(
@@ -179,15 +182,63 @@ async def async_setup_services(
             "shutters": shutters,
         }
         
-        # Fire event with the data so it can be downloaded
-        hass.bus.async_fire(
-            "heytech_config_exported",
-            {
-                "filename": f"{filename}.json",
-                "data": json.dumps(export_data, indent=2),
-            },
-        )
-        _LOGGER.info("Exported %d custom shutters", len(shutters))
+        # Save to file in Home Assistant's config directory
+        import os
+        filepath = os.path.join(hass.config.path(), f"{filename}.json")
+        
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            
+            _LOGGER.info("Exported %d custom shutters to %s", len(shutters), filepath)
+            
+            # Show persistent notification with export location
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": (
+                        f"Configuration exported successfully!\n\n"
+                        f"**Location:** `{filepath}`\n"
+                        f"**Shutters:** {len(shutters)}\n\n"
+                        f"You can download it via File Editor, SSH, or Samba."
+                    ),
+                    "title": "Heytech Configuration Exported",
+                    "notification_id": "heytech_export_success",
+                },
+            )
+            
+            # Fire success event
+            hass.bus.async_fire(
+                "heytech_config_exported",
+                {
+                    "filename": f"{filename}.json",
+                    "filepath": filepath,
+                    "shutters_count": len(shutters),
+                },
+            )
+        except Exception as e:
+            _LOGGER.error("Failed to export configuration: %s", e)
+            
+            # Show error notification
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": (
+                        f"Failed to export configuration!\n\n"
+                        f"**Error:** {e}\n\n"
+                        f"Check the logs for more details."
+                    ),
+                    "title": "Heytech Export Failed",
+                    "notification_id": "heytech_export_failed",
+                },
+            )
+            
+            hass.bus.async_fire(
+                "heytech_config_export_failed",
+                {"error": str(e)},
+            )
 
     async def handle_import_shutters(call: ServiceCall) -> None:
         """Handle the import_shutters_config service call."""
@@ -234,6 +285,44 @@ async def async_setup_services(
                 {"error": f"Invalid JSON: {e}"},
             )
 
+    async def handle_sync_time(call: ServiceCall) -> None:
+        """Handle the sync_time service call."""
+        _LOGGER.info("Synchronizing time with Heytech controller")
+        try:
+            await api_client.async_sync_time()
+            _LOGGER.info("Time synchronized successfully")
+            
+            # Show success notification
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": "Time synchronized successfully with Heytech controller.",
+                    "title": "Heytech Time Sync",
+                    "notification_id": "heytech_time_sync_success",
+                },
+            )
+            
+            hass.bus.async_fire("heytech_time_synced")
+        except Exception as e:
+            _LOGGER.error("Failed to sync time: %s", e)
+            
+            # Show error notification
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": f"Failed to sync time: {e}",
+                    "title": "Heytech Time Sync Failed",
+                    "notification_id": "heytech_time_sync_failed",
+                },
+            )
+            
+            hass.bus.async_fire(
+                "heytech_time_sync_failed",
+                {"error": str(e)},
+            )
+
     # Register services only once
     if not hass.services.has_service(DOMAIN, SERVICE_READ_LOGBOOK):
         hass.services.async_register(
@@ -270,6 +359,14 @@ async def async_setup_services(
             SERVICE_IMPORT_SHUTTERS,
             handle_import_shutters,
             schema=SCHEMA_IMPORT_SHUTTERS,
+        )
+    
+    if not hass.services.has_service(DOMAIN, SERVICE_SYNC_TIME):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SYNC_TIME,
+            handle_sync_time,
+            schema=SCHEMA_SYNC_TIME,
         )
 
 

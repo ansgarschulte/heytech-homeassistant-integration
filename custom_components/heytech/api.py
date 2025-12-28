@@ -503,6 +503,31 @@ class HeytechApiClient:
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
 
+    async def async_sync_time(self) -> None:
+        """Synchronize date and time with the controller."""
+        from datetime import datetime
+        
+        now = datetime.now()
+        
+        # Format: rdt followed by: day,month,year,hour,minute,second,weekday
+        # Weekday: 1=Monday, 7=Sunday
+        weekday = now.isoweekday()  # 1=Monday, 7=Sunday
+        
+        time_data = (
+            f"{now.day},{now.month},{now.year % 100},"
+            f"{now.hour},{now.minute},{now.second},{weekday}"
+        )
+        
+        _LOGGER.info("Syncing time: %s", time_data)
+        
+        commands = [f"rdt{time_data}\r\n"]
+        if self._pin:
+            commands = ["rsc\r\n", f"{self._pin}\r\n"] + commands
+        
+        await self.command_queue.put(commands)
+        if self.connection_task is None or self.connection_task.done():
+            self.connection_task = asyncio.create_task(self._process_commands())
+
     def _raise_communication_error(self, message: str) -> None:
         """Raise a communication error with the given message."""
         raise IntegrationHeytechApiClientCommunicationError(message)

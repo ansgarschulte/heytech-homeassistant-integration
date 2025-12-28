@@ -21,8 +21,9 @@ Control your Heytech shutter system directly from Home Assistant.
 ✅ **Groups** - Control multiple shutters as groups (up to 8)  
 ✅ **Scenes** - Activate predefined scenarios  
 ✅ **Sensors** - Temperature, humidity, wind, rain, brightness  
-✅ **Services** - Logbook access, group control  
+✅ **Services** - Logbook access, group control, time sync  
 ✅ **Tilt Control** - Jalousie/blind angle control  
+✅ **Time Sync** - Button entity and service for time synchronization  
 
 ---
 
@@ -117,6 +118,27 @@ data:
         "Bedroom": "4,5"
       }
     }
+```
+
+**Synchronize Time**
+```yaml
+service: heytech.sync_time
+```
+
+Sends current Home Assistant date/time to the controller. Useful for:
+- Daily automation (e.g., at 3 AM)
+- After controller restarts
+- Initial setup
+
+**Example Automation:**
+```yaml
+automation:
+  - alias: "Daily Time Sync"
+    trigger:
+      - platform: time
+        at: "03:00:00"
+    action:
+      - service: heytech.sync_time
 ```
 
 ---

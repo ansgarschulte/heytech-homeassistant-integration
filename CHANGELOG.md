@@ -13,11 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Added
 
-#### Backup & Restore (NEW!)
+#### Time Synchronization (NEW!)
+- **Sync Time Button** - Button entity for easy time synchronization
+  - Entity: `button.synchronize_time`
+  - Icon: `mdi:clock-sync`
+  - Can be used in automations (e.g., daily at 3 AM)
+  
+- **Sync Time Service** - Service for manual or automated time sync
+  - Service: `heytech.sync_time`
+  - Command: `rdt` (receive date and time)
+  - Sends current date/time from Home Assistant to controller
+  - Notifications on success/failure
+
+#### Backup & Restore
 - **Export Configuration** - Backup custom shutters via UI or service
-  - Options flow: Export/Import menu items
+  - Options flow: Export/Import menu items with JSON preview
   - Service: `heytech.export_shutters_config`
   - JSON format for easy editing
+  - Persistent notifications with file location
   
 - **Import Configuration** - Restore custom shutters via UI or service
   - Options flow: Import from JSON
@@ -68,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `heytech.clear_logbook` - Clear all logbook entries
 - `heytech.export_shutters_config` - Export custom shutters configuration
 - `heytech.import_shutters_config` - Import custom shutters configuration
+- `heytech.sync_time` - Synchronize date/time with controller
 
 #### Developer Tools
 - **Docker Test Environment** - Complete local testing setup
@@ -82,6 +96,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Fixed
 
+- **Cover State Logic** - Corrected open/closed interpretation
+  - Position 100 = open (previously: closed)
+  - Position 0 = closed (previously: open)
+  - Now matches Heytech controller behavior
+  
+- **Custom Shutter Filtering** - No longer removes dynamic shutters
+  - Custom shutters no longer hide auto-discovered shutters on same channels
+  - Both custom and dynamic shutters with overlapping channels are now shown
+  
 - **CRITICAL: Controller Initialization** - RHI/RHE sequence
   - Controllers now respond immediately after restart
   - No need to start HEYcontrol.exe first!
@@ -147,9 +170,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `swp`, `rwp`, `srp`, `rrp` - Wind/rain
 - `rhi`, `rhb`, `rhe` - Manual control
 - `rsc` - PIN/Security
+- `rdt` - Time synchronization (NEW!)
 
 #### Available for Future Implementation
-- Date/time management (`sdt`, `rdt`)
+- Date retrieval (`sdt`, `sti`)
 - Fixed schedules (`sfs`, `rfs`)
 - Holiday calendar (`sft`, `rft`)
 - Advanced automation profiles

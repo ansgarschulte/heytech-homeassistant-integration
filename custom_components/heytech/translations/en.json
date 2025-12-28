@@ -56,7 +56,10 @@
       },
       "export_config": {
         "title": "Export Shutters Configuration",
-        "description": "Copy the configuration below and save it to a file:\n\n{config_data}\n\nTotal shutters: {count}"
+        "description": "Copy the JSON configuration below. You can also use Developer Tools > Services > 'heytech.export_shutters_config' to save it to a file.\n\nTotal shutters: {count}",
+        "data": {
+          "export_data": "Configuration JSON (read-only, copy this)"
+        }
       },
       "import_config": {
         "title": "Import Shutters Configuration",
