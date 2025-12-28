@@ -12,6 +12,7 @@ from typing import Any
 
 from custom_components.heytech.parse_helper import (
     END_RGZ,
+    END_RZN,
     END_SAU,
     END_SBP,
     END_SDA,
@@ -29,6 +30,7 @@ from custom_components.heytech.parse_helper import (
     END_SWP,
     END_SZN,
     START_RGZ,
+    START_RZN,
     START_SAU,
     START_SBP,
     START_SDA,
@@ -296,7 +298,11 @@ class HeytechApiClient:
             await self.add_command("smn", [])
             await self.add_command("sop", [])
             await self.add_command("skd", [])
-            await self.add_command("szn", [])  # Get scenario names
+            
+            # Query scenarios (try all 16 possible scenario slots)
+            for i in range(1, 17):
+                await self.add_command(f"rzn", [i])
+            
             await self.add_command("sau", [])  # Get automation status
             await self.add_command("sgz", [])  # Get group info (bitmask format)
             await self.add_command("sla", [])  # Get logbook count
@@ -566,9 +572,16 @@ class HeytechApiClient:
                     self.max_channels = parse_smc_max_channel_output(line)
                 elif START_SKD in line and END_SKD in line:
                     self.climate_data = parse_skd_climate_data(line)
-                elif START_SZN in line and END_SZN in line:
+                elif START_RZN in line and END_RZN in line:
+                    # Parse scenario names from RZN (receive command)
                     one_scenario = parse_szn_scenario_names_output(line)
                     self.scenarios = {**self.scenarios, **one_scenario}
+                    _LOGGER.info("Scenario discovered: %s", one_scenario)
+                elif START_SZN in line and END_SZN in line:
+                    # Fallback: also check SZN (though RZN is correct)
+                    one_scenario = parse_szn_scenario_names_output(line)
+                    self.scenarios = {**self.scenarios, **one_scenario}
+                    _LOGGER.info("Scenario discovered via SZN: %s", one_scenario)
                 elif START_SAU in line and END_SAU in line:
                     self.automation_status = parse_sau_automation_status(line)
                 elif START_RGZ in line and END_RGZ in line:

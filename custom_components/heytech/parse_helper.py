@@ -24,6 +24,8 @@ START_SFI = "start_sfi"
 END_SFI = "ende_sfi"
 START_SZN = "start_szn"
 END_SZN = "ende_szn"
+START_RZN = "start_rzn"
+END_RZN = "ende_rzn"
 START_SSZ = "start_ssz"
 END_SSZ = "ende_ssz"
 START_SAU = "start_sau"
@@ -190,18 +192,33 @@ def _parse_string_output(line: str, start_command: str, stop_command: str) -> st
 
 def parse_szn_scenario_names_output(line: str) -> dict[int, str]:
     """
-    Parse scenario names from the 'szn' command.
+    Parse scenario names from the 'szn' or 'rzn' command.
     
-    Example response: 'start_szn1,Scenario Name,1,ende_szn'
+    Example response: 'start_rzn1,Scenario Name,1,ende_rzn'
     Returns dict with scenario number as key and name as value.
+    
+    Note: The correct receive command is RZN, not SZN!
+    SZN is the send command, RZN is receive.
     """
     scenarios = {}
-    if START_SZN in line and END_SZN in line:
+    
+    # Try RZN first (correct receive command)
+    if START_RZN in line and END_RZN in line:
+        match = re.match(r"start_rzn(\d+),(.+?),(\d+),ende_rzn", line)
+        if match:
+            scenario_num = int(match.group(1))
+            name = match.group(2).strip()
+            scenarios[scenario_num] = name
+            _LOGGER.debug("Parsed scenario %d: '%s'", scenario_num, name)
+    # Fallback to SZN for backward compatibility
+    elif START_SZN in line and END_SZN in line:
         match = re.match(r"start_szn(\d+),(.+?),(\d+),ende_szn", line)
         if match:
             scenario_num = int(match.group(1))
             name = match.group(2).strip()
             scenarios[scenario_num] = name
+            _LOGGER.debug("Parsed scenario %d: '%s' (via SZN)", scenario_num, name)
+    
     return scenarios
 
 
