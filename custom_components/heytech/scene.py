@@ -5,6 +5,7 @@ This module provides support for Heytech scenarios within Home Assistant,
 allowing users to activate predefined scenarios on their Heytech controller.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -29,11 +30,26 @@ async def async_setup_entry(
     _LOGGER.info("Setting up Heytech scenes for entry %s", entry.entry_id)
     api_client: HeytechApiClient = hass.data[DOMAIN][entry.entry_id]["api_client"]
 
+    # Wait a bit for discovery to complete
+    # The coordinator runs async_read_heytech_data() which discovers scenarios
+    # This happens in parallel with platform setup, so we need to wait
+    await asyncio.sleep(2)  # Give discovery time to complete
+    
     # Fetch scenarios from the API
     scenarios = api_client.get_scenarios()
     
     if not scenarios:
-        _LOGGER.warning("No scenarios found on Heytech device")
+        _LOGGER.warning("No scenarios found on Heytech device - will retry discovery")
+        # Trigger another discovery attempt
+        try:
+            await api_client.async_read_heytech_data()
+            await asyncio.sleep(1)  # Wait for responses
+            scenarios = api_client.get_scenarios()
+        except Exception:
+            _LOGGER.exception("Failed to discover scenarios")
+    
+    if not scenarios:
+        _LOGGER.warning("Still no scenarios found after retry")
         return
 
     scenes = []
@@ -45,6 +61,7 @@ async def async_setup_entry(
         )
 
     async_add_entities(scenes)
+    _LOGGER.info("Successfully added %d Heytech scenes", len(scenes))
 
 
 class HeytechScene(Scene):
