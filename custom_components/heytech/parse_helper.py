@@ -30,8 +30,8 @@ START_SAU = "start_sau"
 END_SAU = "ende_sau"
 START_SGR = "start_sgr"
 END_SGR = "ende_sgr"
-START_SGZ = "start_sgz"
-END_SGZ = "ende_sgz"
+START_RGZ = "start_rgz"
+END_RGZ = "ende_rgz"
 START_SLD = "start_sld"
 END_SLD = "ende_sld"
 START_SLA = "start_sla"
@@ -248,18 +248,21 @@ def parse_sau_automation_status(line: str) -> bool | None:
     return None
 
 
-def parse_sgr_groups_output(line: str) -> dict[int, list[int]]:
+def parse_rgz_group_assignments(line: str) -> dict[int, list[int]]:
     """
-    Parse group assignments from the 'sgr' command.
+    Parse group channel assignments from the 'rgz' command.
     
-    Example response: 'start_sgr1,1,2,3,0,0,0,...ende_sgr'
+    Example response: 'start_rgz1,1,2,3,0,0,0,...ende_rgz'
+    The controller sends one line per group with assigned channels.
+    0 values mean no channel assigned.
+    
     Returns dict with group number as key and list of channel numbers as value.
     """
     groups = {}
-    if START_SGR in line and END_SGR in line:
+    if START_RGZ in line and END_RGZ in line:
         # Extract data between markers
-        start_index = line.find(START_SGR) + len(START_SGR)
-        end_index = line.rfind(END_SGR)
+        start_index = line.find(START_RGZ) + len(START_RGZ)
+        end_index = line.rfind(END_RGZ)
         data_str = line[start_index:end_index]
         
         parts = data_str.split(",")
@@ -267,28 +270,75 @@ def parse_sgr_groups_output(line: str) -> dict[int, list[int]]:
             try:
                 group_num = int(parts[0])
                 # Filter out 0 values (inactive channels)
-                channels = [int(ch) for ch in parts[1:] if ch.strip() and int(ch) > 0]
+                channels = [int(ch) for ch in parts[1:] if ch.strip() and ch.strip() != '0' and int(ch) > 0]
                 if channels:  # Only add if group has channels
                     groups[group_num] = channels
-            except (ValueError, IndexError):
-                _LOGGER.warning("Failed to parse group data: %s", line)
+                    _LOGGER.debug("Parsed group %d with channels %s", group_num, channels)
+            except (ValueError, IndexError) as e:
+                _LOGGER.warning("Failed to parse group data: %s, error: %s", line, e)
     return groups
 
 
-def parse_sgz_group_control_output(line: str) -> dict[int, str]:
+# Keep old function for backward compatibility but deprecate it
+def parse_sgr_groups_output(line: str) -> dict[int, list[int]]:
+    """
+    DEPRECATED: Use parse_rgz_group_assignments instead.
+    SGR is a send command, not receive. The correct receive command is RGZ.
+    """
+    return parse_rgz_group_assignments(line.replace("start_sgr", "start_rgz").replace("ende_sgr", "ende_rgz"))
+
+
+def parse_sgz_group_control_output(line: str) -> dict[int, dict[str, Any]]:
     """
     Parse group control settings from the 'sgz' command.
     
-    Example response: 'start_sgz1,Group Name,1,ende_sgz'
-    Returns dict with group number and name.
+    Real data shows: 'start_sgz1,255,63,0,0,319,ende_sgz'
+    
+    The numbers appear to be bitmasks for channel assignments:
+    - 255 (0xFF) = channels 1-8
+    - 63 (0x3F) = channels 9-14
+    etc.
+    
+    Returns dict with group number and extracted channel list + name.
     """
     group_info = {}
-    if START_SGZ in line and END_SGZ in line:
-        match = re.match(r"start_sgz(\d+),(.+?),(\d+),ende_sgz", line)
-        if match:
-            group_num = int(match.group(1))
-            name = match.group(2).strip()
-            group_info[group_num] = name
+    if "start_sgz" in line and "ende_sgz" in line:
+        try:
+            start_index = line.find("start_sgz") + len("start_sgz")
+            end_index = line.rfind("ende_sgz")
+            data_str = line[start_index:end_index]
+            
+            parts = data_str.split(",")
+            if len(parts) >= 2:
+                group_num = int(parts[0])
+                
+                # Parse bitmasks to extract channel numbers
+                channels = []
+                for i, bitmask_str in enumerate(parts[1:]):
+                    if not bitmask_str.strip():
+                        continue
+                    try:
+                        bitmask = int(bitmask_str)
+                        if bitmask == 0:
+                            continue
+                        # Check each bit in the bitmask
+                        for bit in range(8):
+                            if bitmask & (1 << bit):
+                                channel = i * 8 + bit + 1  # Channel numbers start at 1
+                                channels.append(channel)
+                    except ValueError:
+                        continue
+                
+                if channels:
+                    name = f"Group {group_num}"
+                    group_info[group_num] = {
+                        "name": name,
+                        "channels": channels
+                    }
+                    _LOGGER.debug("Parsed SGZ group %d: name='%s', channels=%s", 
+                                 group_num, name, channels)
+        except (ValueError, IndexError) as e:
+            _LOGGER.warning("Failed to parse SGZ data: %s, error: %s", line, e)
     return group_info
 
 

@@ -11,12 +11,12 @@ from asyncio import Queue
 from typing import Any
 
 from custom_components.heytech.parse_helper import (
+    END_RGZ,
     END_SAU,
     END_SBP,
     END_SDA,
     END_SDM,
     END_SGR,
-    END_SGZ,
     END_SJP,
     END_SKD,
     END_SLA,
@@ -28,12 +28,12 @@ from custom_components.heytech.parse_helper import (
     END_SSZ,
     END_SWP,
     END_SZN,
+    START_RGZ,
     START_SAU,
     START_SBP,
     START_SDA,
     START_SDM,
     START_SGR,
-    START_SGZ,
     START_SJP,
     START_SKD,
     START_SLA,
@@ -45,11 +45,11 @@ from custom_components.heytech.parse_helper import (
     START_SSZ,
     START_SWP,
     START_SZN,
+    parse_rgz_group_assignments,
     parse_sau_automation_status,
     parse_sbp_shading_params,
     parse_sda_dusk_params,
     parse_sdm_dawn_params,
-    parse_sgr_groups_output,
     parse_sgz_group_control_output,
     parse_sjp_jalousie_params,
     parse_skd_climate_data,
@@ -298,8 +298,7 @@ class HeytechApiClient:
             await self.add_command("skd", [])
             await self.add_command("szn", [])  # Get scenario names
             await self.add_command("sau", [])  # Get automation status
-            await self.add_command("sgr", [])  # Get group assignments
-            await self.add_command("sgz", [])  # Get group names
+            await self.add_command("sgz", [])  # Get group info (bitmask format)
             await self.add_command("sla", [])  # Get logbook count
             await self.add_command("sjp", [])  # Get jalousie params (for all channels)
             await self.add_command("sbp", [])  # Get shading params
@@ -572,22 +571,26 @@ class HeytechApiClient:
                     self.scenarios = {**self.scenarios, **one_scenario}
                 elif START_SAU in line and END_SAU in line:
                     self.automation_status = parse_sau_automation_status(line)
-                elif START_SGR in line and END_SGR in line:
-                    # Parse group channel assignments
-                    group_channels = parse_sgr_groups_output(line)
+                elif START_RGZ in line and END_RGZ in line:
+                    # Parse group channel assignments from RGZ (receive command)
+                    group_channels = parse_rgz_group_assignments(line)
                     for group_num, channels in group_channels.items():
                         if group_num not in self.groups:
-                            self.groups[group_num] = {"channels": channels}
+                            # Generate a default name
+                            self.groups[group_num] = {
+                                "name": f"Group {group_num}",
+                                "channels": channels
+                            }
                         else:
                             self.groups[group_num]["channels"] = channels
-                elif START_SGZ in line and END_SGZ in line:
-                    # Parse group names
-                    group_names = parse_sgz_group_control_output(line)
-                    for group_num, name in group_names.items():
-                        if group_num not in self.groups:
-                            self.groups[group_num] = {"name": name}
-                        else:
-                            self.groups[group_num]["name"] = name
+                        _LOGGER.info("Group %d discovered with channels %s", group_num, channels)
+                elif "start_sgz" in line and "ende_sgz" in line:
+                    # Parse group info from SGZ (contains bitmasks for channel assignments)
+                    group_data = parse_sgz_group_control_output(line)
+                    for group_num, info in group_data.items():
+                        self.groups[group_num] = info
+                        _LOGGER.info("Group %d discovered: '%s' with channels %s", 
+                                    group_num, info.get("name"), info.get("channels"))
                 elif START_SLD in line and END_SLD in line:
                     # Parse logbook entry
                     entry = parse_sld_logbook_entry(line)
