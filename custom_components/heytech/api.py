@@ -74,8 +74,10 @@ RETRY_DELAY = 1  # Delay between retries in seconds
 FULLY_OPEN = 100
 FULLY_CLOSED = 0
 
-SOP_INTERVAL = 60  # seconds
-SKD_INTERVAL = 120  # seconds
+# Polling intervals - reduced for better responsiveness
+# Position updates come from controller automatically when shutters move
+SOP_INTERVAL = 120  # seconds - Poll position every 2 minutes (was 60)
+SKD_INTERVAL = 300  # seconds - Poll climate every 5 minutes (was 120)
 
 
 class IntegrationHeytechApiClientError(Exception):
@@ -523,14 +525,26 @@ class HeytechApiClient:
                 last_skd = asyncio.get_event_loop().time()
 
     async def _process_commands(self) -> None:
-        """Process commands from the queues, prioritizing normal commands."""
+        """
+        Process commands from the queues, prioritizing normal commands.
+        
+        User commands have absolute priority - they interrupt periodic commands.
+        This ensures responsive control even when periodic polling is active.
+        """
         while not (self.command_queue.empty() and self.periodic_command_queue.empty()):
-            # Always check the normal command queue first.
+            # Always check the normal command queue first - PRIORITY!
             if not self.command_queue.empty():
                 commands = await self.command_queue.get()
+                is_user_command = True
             else:
-                # If normal command queue is empty, process periodic commands.
-                commands = await self.periodic_command_queue.get()
+                # Only process periodic commands when no user commands pending
+                # Check if user command arrived while we were waiting
+                try:
+                    commands = self.periodic_command_queue.get_nowait()
+                    is_user_command = False
+                except asyncio.QueueEmpty:
+                    # Both queues empty now
+                    break
 
             retries = 0
             while retries < MAX_RETRIES:
@@ -547,11 +561,20 @@ class HeytechApiClient:
                 try:
                     if self.writer:
                         for command in commands:
-                            _LOGGER.debug("Sending command: %s", command.strip())
+                            _LOGGER.debug(
+                                "Sending %s command: %s", 
+                                "USER" if is_user_command else "periodic",
+                                command.strip()
+                            )
                             self.writer.write(command.encode("ascii"))
                             await self.writer.drain()
                             self.last_activity = asyncio.get_event_loop().time()
-                            await asyncio.sleep(COMMAND_DELAY)
+                            
+                            # Shorter delay for user commands = more responsive!
+                            if is_user_command:
+                                await asyncio.sleep(0.02)  # 20ms for user commands
+                            else:
+                                await asyncio.sleep(COMMAND_DELAY)  # 50ms for periodic
                         break
                     _LOGGER.error("Writer is not available. Cannot send command.")
                     self._raise_communication_error("Writer is not available")
