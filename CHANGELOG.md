@@ -1,6 +1,163 @@
 # Changelog
 
-## [Unreleased] - Priority 1 & 2 Features
+All notable changes to the Heytech Home Assistant Integration will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.0.0] - 2025-12-28
+
+🎉 **MAJOR RELEASE** - Complete feature set with all community-requested features!
+
+### 🚀 Added
+
+#### Core Features
+- **Scene Support** - Automatic discovery and activation of Heytech scenarios
+  - Commands: `szn` (scenario names), `rsa` (activate)
+  - Scene entities for Home Assistant UI and automations
+  - PIN protection support
+  
+- **Group Control** - Shutter groups as separate cover entities
+  - Commands: `sgr` (assignments), `sgz` (names)
+  - Full control support (open, close, stop, position)
+  - Service: `heytech.control_group`
+  
+- **Jalousie/Blind Tilt Control** - Venetian blind tilt support
+  - Command: `sjp` (jalousie parameters)
+  - Full tilt position control (0-100%)
+  - Open/close/stop/set_position for tilt
+
+#### Sensors
+- **Wind Speed** - Current and maximum (km/h)
+- **Rain Status** - Binary rain detection sensor
+- **Alarm Status** - Binary alarm state sensor
+- **Brightness** - Current and medium brightness (Lux)
+- **Automation Status** - External automation switch state
+- **Logbook Count** - Number of logbook entries
+
+#### Automation Parameters
+- **Shading Automation** - Commands: `sbp`, `rbp`
+  - Brightness threshold configuration
+  - Target position per channel
+  
+- **Dawn/Dusk Automation** - Commands: `sdm`, `rdm`, `sda`, `rda`
+  - Configurable thresholds
+  - Per-channel actions
+  
+- **Wind/Rain Protection** - Commands: `swp`, `rwp`, `srp`, `rrp`
+  - Threshold configuration
+  - Automated protective actions
+
+#### Services
+- `heytech.control_group` - Control shutter groups
+- `heytech.read_logbook` - Read up to 500 logbook entries
+  - Fires `heytech_logbook_read` event
+- `heytech.clear_logbook` - Clear all logbook entries
+
+#### Developer Tools
+- **Docker Test Environment** - Complete local testing setup
+  - Docker Compose configuration
+  - Persistent Home Assistant config
+  - Live code mounting
+  
+- **API Test Script** (`tests/test_api.py`)
+  - Comprehensive test suite
+  - Manual testing of all features
+  - Connection validation
+
+### 🔧 Fixed
+
+- **CRITICAL: Controller Initialization** - RHI/RHE sequence
+  - Controllers now respond immediately after restart
+  - No need to start HEYcontrol.exe first!
+  - Source: Original HEYcontrol documentation
+  
+- **Scene Discovery Timing** - Wait for discovery completion
+  - Scenes now appear reliably in Home Assistant
+  - Retry logic for failed discoveries
+  
+- **Config Flow** - AttributeError in options flow
+  - Fixed property setter issue
+  - Options configuration now works correctly
+
+### ⚡ Performance
+
+- **Command Queue Optimization**
+  - User commands: 20ms delay (was 50ms) = 2.5x faster
+  - User commands have absolute priority
+  - Periodic commands can't block user actions
+  - Clear logging: "USER command" vs "periodic command"
+  
+- **Reduced Polling Frequency**
+  - Position updates: 60s → 120s (every 2 minutes)
+  - Climate updates: 120s → 300s (every 5 minutes)
+  - Less network traffic = more stable connection
+
+### 📚 Documentation
+
+- Updated README with all features
+- Comprehensive DEVELOPMENT.md guide
+- Test environment documentation
+- Service usage examples
+- Automation examples
+
+### 🔄 Changed
+
+- Consolidated documentation (removed redundant markdown files)
+- Improved logging throughout
+- Better error handling and validation
+- Enhanced type hints and code documentation
+
+### 📊 Statistics
+
+- **Total**: ~1,000+ lines of new code
+- **New Files**: 3 (scene.py, services.yaml, docker-compose.yml)
+- **Modified Files**: 10+
+- **New Features**: 20+
+- **Commands Supported**: 30+ (was ~10)
+
+### 🎯 Command Support
+
+#### Fully Implemented ✅
+- `smc`, `smn` - Discovery
+- `sop` - Shutter positions
+- `skd` - Climate data (all sensors)
+- `sau` - Automation status
+- `szn`, `ssz`, `rsa` - Scenarios
+- `sgr`, `sgz` - Groups
+- `sld`, `sla`, `sll` - Logbook
+- `sjp` - Jalousie/tilt
+- `sbp`, `rbp` - Shading automation
+- `sdm`, `rdm`, `sda`, `rda` - Dawn/dusk
+- `swp`, `rwp`, `srp`, `rrp` - Wind/rain
+- `rhi`, `rhb`, `rhe` - Manual control
+- `rsc` - PIN/Security
+
+#### Available for Future Implementation
+- Date/time management (`sdt`, `rdt`)
+- Fixed schedules (`sfs`, `rfs`)
+- Holiday calendar (`sft`, `rft`)
+- Advanced automation profiles
+
+---
+
+## [0.7.0] - 2024-XX-XX
+
+### Added
+- Initial public release
+- Basic shutter control (open, close, stop, position)
+- Temperature and humidity sensors
+- Config flow for setup
+
+---
+
+## Links
+
+- [GitHub Repository](https://github.com/ansgarschulte/heytech-homeassistant-integration)
+- [Issue Tracker](https://github.com/ansgarschulte/heytech-homeassistant-integration/issues)
+- [HACS Store](https://hacs.xyz)
 
 ### Added - Priority 1 Features ✅
 

@@ -1,8 +1,11 @@
 # Heytech Home Assistant Integration
 
 [![GitHub Release][releases-shield]][releases]
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ansgarschulte/heytech-homeassistant-integration/releases)
 [![License][license-shield]](LICENSE)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
+
+**🎉 Version 1.0.0** - Complete feature set with scenes, groups, sensors, and advanced automation!
 
 Control your Heytech shutter system directly from Home Assistant.
 
