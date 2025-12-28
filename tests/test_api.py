@@ -21,30 +21,38 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Mock Home Assistant modules
-class MockModule:
-    def __getattr__(self, name):
-        return MockModule()
-    def __call__(self, *args, **kwargs):
-        return MockModule()
-    def __getitem__(self, key):
-        return MockModule()
+# Import the API module directly to avoid __init__.py imports
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    "heytech_api",
+    Path(__file__).parent.parent / "custom_components" / "heytech" / "api.py"
+)
+heytech_api = importlib.util.module_from_spec(spec)
 
-# Mock all HA dependencies
-for mod in [
-    'homeassistant', 'homeassistant.core', 'homeassistant.helpers',
-    'homeassistant.helpers.update_coordinator', 'homeassistant.config_entries',
-    'homeassistant.const', 'homeassistant.exceptions',
-    'homeassistant.helpers.entity_platform', 'homeassistant.helpers.device_registry',
-    'homeassistant.helpers.entity_registry', 'homeassistant.helpers.config_validation',
-    'homeassistant.components.cover', 'homeassistant.components.sensor',
-    'homeassistant.components.binary_sensor', 'homeassistant.components.scene',
-    'homeassistant.data_entry_flow', 'homeassistant.helpers.selector',
-    'voluptuous'
-]:
-    sys.modules[mod] = MockModule()
+# Mock only what's needed
+class MockLogger:
+    def debug(self, *args, **kwargs): pass
+    def info(self, *args, **kwargs): pass
+    def warning(self, *args, **kwargs): pass
+    def error(self, *args, **kwargs): pass
 
-from custom_components.heytech.api import HeytechApiClient
+sys.modules['custom_components'] = type(sys)('custom_components')
+sys.modules['custom_components.heytech'] = type(sys)('heytech')
+sys.modules['custom_components.heytech.const'] = type(sys)('const')
+sys.modules['custom_components.heytech.const'].LOGGER = MockLogger()
+
+# Load parse_helper first
+parse_spec = importlib.util.spec_from_file_location(
+    "parse_helper",
+    Path(__file__).parent.parent / "custom_components" / "heytech" / "parse_helper.py"
+)
+parse_helper = importlib.util.module_from_spec(parse_spec)
+parse_spec.loader.exec_module(parse_helper)
+sys.modules['custom_components.heytech.parse_helper'] = parse_helper
+
+# Now load API
+spec.loader.exec_module(heytech_api)
+HeytechApiClient = heytech_api.HeytechApiClient
 
 # Configure logging
 logging.basicConfig(
