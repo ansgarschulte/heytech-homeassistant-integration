@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import voluptuous as vol
@@ -188,8 +189,6 @@ async def async_setup_services(
         }
 
         # Save to file in Home Assistant's config directory
-        from pathlib import Path
-
         filepath = Path(hass.config.path()) / f"{filename}.json"
 
         try:

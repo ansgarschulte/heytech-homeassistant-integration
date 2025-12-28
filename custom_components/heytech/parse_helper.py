@@ -287,10 +287,16 @@ def parse_rgz_group_assignments(line: str) -> dict[int, list[int]]:
             try:
                 group_num = int(parts[0])
                 # Filter out 0 values (inactive channels)
-                channels = [int(ch) for ch in parts[1:] if ch.strip() and ch.strip() != "0" and int(ch) > 0]
+                channels = [
+                    int(ch)
+                    for ch in parts[1:]
+                    if ch.strip() and ch.strip() != "0" and int(ch) > 0
+                ]
                 if channels:  # Only add if group has channels
                     groups[group_num] = channels
-                    _LOGGER.debug("Parsed group %d with channels %s", group_num, channels)
+                    _LOGGER.debug(
+                        "Parsed group %d with channels %s", group_num, channels
+                    )
             except (ValueError, IndexError) as e:
                 _LOGGER.warning("Failed to parse group data: %s, error: %s", line, e)
     return groups
@@ -299,10 +305,14 @@ def parse_rgz_group_assignments(line: str) -> dict[int, list[int]]:
 # Keep old function for backward compatibility but deprecate it
 def parse_sgr_groups_output(line: str) -> dict[int, list[int]]:
     """
-    DEPRECATED: Use parse_rgz_group_assignments instead.
-    SGR is a send command, not receive. The correct receive command is RGZ.
+    Use parse_rgz_group_assignments instead (deprecated).
+
+    DEPRECATED: SGR is a send command, not receive.
+    The correct receive command is RGZ.
     """
-    return parse_rgz_group_assignments(line.replace("start_sgr", "start_rgz").replace("ende_sgr", "ende_rgz"))
+    return parse_rgz_group_assignments(
+        line.replace("start_sgr", "start_rgz").replace("ende_sgr", "ende_rgz")
+    )
 
 
 def parse_sgz_group_control_output(line: str) -> dict[int, dict[str, Any]]:
@@ -482,9 +492,11 @@ def parse_sbp_shading_params(line: str) -> dict[str, Any] | None:
     return None
 
 
-def parse_automation_params(line: str, start_marker: str, end_marker: str) -> dict[str, Any] | None:
+def parse_automation_params(
+    line: str, start_marker: str, end_marker: str
+) -> dict[str, Any] | None:
     """
-    Generic parser for automation parameters (dawn, dusk, wind, rain).
+    Parse automation parameters (dawn, dusk, wind, rain).
 
     Common format: 'start_XXX1,threshold,action,enabled,ende_XXX'
     """
@@ -496,9 +508,12 @@ def parse_automation_params(line: str, start_marker: str, end_marker: str) -> di
         parts = data_str.split(",")
         if len(parts) >= 4:
             try:
+                threshold = (
+                    int(parts[1]) if parts[1].isdigit() else parts[1].strip()
+                )
                 return {
                     "channel": int(parts[0]),
-                    "threshold": int(parts[1]) if parts[1].isdigit() else parts[1].strip(),
+                    "threshold": threshold,
                     "action": parts[2].strip(),
                     "enabled": int(parts[3]) == 1,
                 }

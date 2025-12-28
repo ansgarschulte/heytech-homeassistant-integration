@@ -502,7 +502,8 @@ class HeytechApiClient:
 
     async def async_sync_time(self) -> None:
         """Synchronize date and time with the controller."""
-        now = datetime.now()
+        # Get current time in local timezone (controller expects local time)
+        now = datetime.now().astimezone()
 
         # Format: rdt followed by: day,month,year,hour,minute,second,weekday
         # Weekday: 1=Monday, 7=Sunday
