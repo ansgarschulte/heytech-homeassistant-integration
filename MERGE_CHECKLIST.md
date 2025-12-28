@@ -1,8 +1,8 @@
-# Merge Checklist für Version 1.0.0
+# Merge Checklist für Version 1.5.0
 
 ## ✅ Pre-Merge Validation
 
-- [x] Version auf 1.0.0 erhöht (manifest.json)
+- [x] Version auf 1.5.0 erhöht (manifest.json)
 - [x] CHANGELOG.md vollständig aktualisiert
 - [x] README.md mit neuer Version Badge
 - [x] Alle Commits gepusht zu `origin/feat/priority-1-2-3-complete`
@@ -15,12 +15,12 @@
 
 **Titel:**
 ```
-Release v1.0.0 - Complete Feature Set 🎉
+Release v1.5.0 - Complete Feature Set 🎉
 ```
 
 **Beschreibung:**
 ```markdown
-## 🎉 Version 1.0.0 - Major Release
+## 🎉 Version 1.5.0 - Major Release
 
 Vollständige Implementierung aller Community-Features!
 
@@ -85,7 +85,7 @@ git checkout main
 git pull origin main
 
 # Tag erstellen
-git tag -a v1.0.0 -m "Release v1.0.0 - Complete Feature Set
+git tag -a v1.5.0 -m "Release v1.5.0 - Complete Feature Set
 
 - All Priority 1-3 features
 - Critical bugfixes
@@ -93,15 +93,15 @@ git tag -a v1.0.0 -m "Release v1.0.0 - Complete Feature Set
 - 1,000+ lines of new code"
 
 # Tag pushen
-git push origin v1.0.0
+git push origin v1.5.0
 ```
 
 ### 3. GitHub Release erstellen
 
 1. GitHub → Releases → "Draft a new release"
-2. Tag: `v1.0.0`
-3. Title: `v1.0.0 - Complete Feature Set 🎉`
-4. Body: Aus CHANGELOG.md kopieren (Sektion [1.0.0])
+2. Tag: `v1.5.0`
+3. Title: `v1.5.0 - Complete Feature Set 🎉`
+4. Body: Aus CHANGELOG.md kopieren (Sektion [1.5.0])
 5. "Set as the latest release" ✅
 6. Publish
 
@@ -114,14 +114,14 @@ Nutzer bekommen Update-Notification in HACS.
 
 - [ ] Installation via HACS testen
 - [ ] Fresh Install testen
-- [ ] Upgrade von 0.7.0 testen
+- [ ] Upgrade von 1.0.0 testen
 - [ ] Alle Features validieren
 
 ## 📢 Community Communication
 
 Optional: GitHub Discussions / Issue Update posten:
 ```markdown
-🎉 Version 1.0.0 ist released!
+🎉 Version 1.5.0 ist released!
 
 Alle angefragten Features sind jetzt implementiert:
 - Szenarien ✅
