@@ -202,11 +202,11 @@ class HeytechOptionsFlowHandler(OptionsFlow):
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize Heytech options flow."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
         self._shutters: dict[str, str] = dict(
-            self.config_entry.options.get(
+            config_entry.options.get(
                 CONF_SHUTTERS,
-                self.config_entry.data.get(CONF_SHUTTERS, {}),
+                config_entry.data.get(CONF_SHUTTERS, {}),
             )
         )
         self._shutter_name: str | None = None
@@ -230,9 +230,9 @@ class HeytechOptionsFlowHandler(OptionsFlow):
                 return await self.async_step_remove_shutter()
             if menu_option == "finish":
                 # Check if shutters have changed
-                original_shutters = self.config_entry.options.get(
+                original_shutters = self._config_entry.options.get(
                     CONF_SHUTTERS,
-                    self.config_entry.data.get(CONF_SHUTTERS, {}),
+                    self._config_entry.data.get(CONF_SHUTTERS, {}),
                 )
                 if self._shutters != original_shutters:
                     return self.async_create_entry(
