@@ -296,25 +296,7 @@ class HeytechApiClient:
             self._discovery_complete = asyncio.Event()
             
             await self.add_command("smc", [])
-            
-            # Wait briefly for max_channels to be received
-            try:
-                await asyncio.wait_for(
-                    asyncio.sleep(0.5),  # Give time for SMC response
-                    timeout=1.0
-                )
-            except asyncio.TimeoutError:
-                pass
-            
-            # Get motor names for all channels AND scenarios (65-80)
-            max_ch = self.max_channels if self.max_channels else 32
-            for channel in range(1, max_ch + 1):
-                await self.add_command("smn", [channel])
-            
-            # Get scenario names (channels 65-80)
-            for channel in range(65, 81):
-                await self.add_command("smn", [channel])
-            
+            await self.add_command("smn", [])  # Controller auto-iterates ALL channels including scenarios!
             await self.add_command("sop", [])
             await self.add_command("skd", [])
             await self.add_command("sau", [])  # Get automation status
