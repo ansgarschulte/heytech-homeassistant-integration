@@ -8,6 +8,7 @@ without using external libraries.
 import asyncio
 import logging
 from asyncio import Queue
+from datetime import datetime
 from typing import Any
 
 from custom_components.heytech.parse_helper import (
@@ -505,8 +506,6 @@ class HeytechApiClient:
 
     async def async_sync_time(self) -> None:
         """Synchronize date and time with the controller."""
-        from datetime import datetime
-        
         now = datetime.now()
         
         # Format: rdt followed by: day,month,year,hour,minute,second,weekday

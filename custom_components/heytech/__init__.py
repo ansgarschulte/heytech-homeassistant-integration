@@ -118,7 +118,7 @@ async def async_setup_entry(
     # Forward setup to the configured platforms (e.g., cover)
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    except Exception:
+    except Exception:  # noqa: BLE001
         _LOGGER.exception("Failed to forward entry setup to platforms")
         return False
 
@@ -217,7 +217,7 @@ async def async_setup_services(
                     "shutters_count": len(shutters),
                 },
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             _LOGGER.error("Failed to export configuration: %s", e)
             
             # Show error notification
@@ -304,7 +304,7 @@ async def async_setup_services(
             )
             
             hass.bus.async_fire("heytech_time_synced")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             _LOGGER.error("Failed to sync time: %s", e)
             
             # Show error notification
@@ -391,7 +391,7 @@ async def async_unload_entry(
             try:
                 await api_client.stop()
                 _LOGGER.debug("API client stopped successfully.")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 _LOGGER.exception("Error stopping API client")
 
         # Remove the entry from hass.data
