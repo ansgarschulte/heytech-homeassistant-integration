@@ -156,6 +156,10 @@ class HeytechApiClient:
                 _LOGGER.debug(
                     "Connected to Heytech device at %s:%s", self.host, self.port
                 )
+                
+                # Initialize controller (required after boot/restart)
+                # Send RHI (Hand-Steuerung Initialisierung) + RHE sequence
+                await self._send_initialization_sequence()
             except OSError:
                 retries += 1
                 _LOGGER.exception("Connection error. Retry %d/%d", retries, MAX_RETRIES)
@@ -166,6 +170,35 @@ class HeytechApiClient:
             )
             message = "Failed to connect to Heytech device"
             raise IntegrationHeytechApiClientCommunicationError(message)
+
+    async def _send_initialization_sequence(self) -> None:
+        """
+        Send initialization sequence to wake up controller.
+        
+        The HeyTech controller requires RHI (Hand-Steuerung Initialisierung)
+        after boot/restart before it responds to regular commands.
+        This is what the original HEYcontrol.exe does on connect.
+        """
+        if not self.writer:
+            return
+            
+        try:
+            _LOGGER.info("Sending controller initialization sequence (RHI/RHE)")
+            init_commands = [
+                "rhi\r\n",  # Hand-Steuerung Initialisierung
+                "\r\n",
+                "rhe\r\n",  # Hand-Steuerung exit
+                "\r\n",
+            ]
+            
+            for cmd in init_commands:
+                self.writer.write(cmd.encode("utf-8"))
+                await self.writer.drain()
+                await asyncio.sleep(0.05)  # Small delay between commands
+                
+            _LOGGER.debug("Controller initialization sequence sent successfully")
+        except Exception:
+            _LOGGER.exception("Failed to send initialization sequence")
 
     async def disconnect(self) -> None:
         """Disconnect from the Heytech device."""
