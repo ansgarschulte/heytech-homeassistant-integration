@@ -291,18 +291,32 @@ class HeytechApiClient:
         try:
             # Reset discovery state before each run
             self.shutters = {}
+            self.scenarios = {}
             self.max_channels = None
             self._discovery_complete = asyncio.Event()
             
             await self.add_command("smc", [])
-            await self.add_command("smn", [])
+            
+            # Wait briefly for max_channels to be received
+            try:
+                await asyncio.wait_for(
+                    asyncio.sleep(0.5),  # Give time for SMC response
+                    timeout=1.0
+                )
+            except asyncio.TimeoutError:
+                pass
+            
+            # Get motor names for all channels AND scenarios (65-80)
+            max_ch = self.max_channels if self.max_channels else 32
+            for channel in range(1, max_ch + 1):
+                await self.add_command("smn", [channel])
+            
+            # Get scenario names (channels 65-80)
+            for channel in range(65, 81):
+                await self.add_command("smn", [channel])
+            
             await self.add_command("sop", [])
             await self.add_command("skd", [])
-            
-            # Query scenarios (try all 16 possible scenario slots)
-            for i in range(1, 17):
-                await self.add_command(f"rzn", [i])
-            
             await self.add_command("sau", [])  # Get automation status
             await self.add_command("sgz", [])  # Get group info (bitmask format)
             await self.add_command("sla", [])  # Get logbook count
@@ -561,7 +575,17 @@ class HeytechApiClient:
                     self.shutter_positions = parse_sop_shutter_positions(line)
                 elif START_SMN in line and END_SMN in line:
                     one_shutter = parse_smn_motor_names_output(line)
-                    self.shutters = {**self.shutters, **one_shutter}
+                    
+                    # Check if this is a scenario (channel >= 65) or a regular shutter
+                    for channel, name in one_shutter.items():
+                        if channel >= 65:
+                            # This is a scenario, not a shutter
+                            scenario_num = channel - 64  # Scenarios start at 1
+                            self.scenarios[scenario_num] = name.strip()
+                            _LOGGER.info("Scenario discovered: %d. %s", scenario_num, name.strip())
+                        else:
+                            # Regular shutter - merge with existing data
+                            self.shutters = {**self.shutters, **{name: {"channel": channel, "name": name}}}
                     
                     # Signal discovery complete when all channels processed
                     if (self._discovery_complete 
