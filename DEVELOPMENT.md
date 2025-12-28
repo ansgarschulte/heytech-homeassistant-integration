@@ -1,202 +1,111 @@
-# 🔧 Development Guide
+# Development Guide
 
-## Live Code Reloading
+Complete guide for developing and testing the Heytech integration.
 
-Dein Code ist **live gemountet**! Jede Änderung in `custom_components/heytech/` ist sofort im Container sichtbar.
+---
 
-## Quick Start Development
+## Quick Start
 
 ```bash
-# 1. Container starten
+# 1. Start test environment
 docker-compose up -d
 
-# 2. Code ändern
+# 2. Access Home Assistant
+open http://localhost:8123
+
+# 3. Make code changes
 vim custom_components/heytech/api.py
 
-# 3. Quick Reload (empfohlen)
+# 4. Reload
 ./dev-reload.sh
 
-# Oder manuell:
-docker exec homeassistant-heytech-test ha core reload
+# 5. Check logs
+docker-compose logs -f homeassistant | grep heytech
 ```
+
+---
+
+## Setup
+
+### Docker Environment (Recommended)
+
+**Start**
+```bash
+docker-compose up -d
+```
+
+**Access**: http://localhost:8123  
+**Live Code**: Changes in `custom_components/` are immediately available  
+**Reload**: Use `./dev-reload.sh` after changes
+
+**Stop**
+```bash
+docker-compose down
+```
+
+### Standalone Testing
+
+Test API without Home Assistant:
+
+```bash
+# Simple test
+python tests/test_api.py 192.168.1.100
+
+# With PIN
+python tests/test_api.py 192.168.1.100 --pin 1234
+
+# See all options
+python tests/test_api.py --help
+```
+
+---
 
 ## Development Workflow
 
-### Setup
-```bash
-# Start Home Assistant test instance
-docker-compose up -d
+### 1. Make Changes
 
-# Wait for startup (first time ~1 minute)
-docker-compose logs -f homeassistant
-
-# Access at http://localhost:8123
-# Create admin account
-# Add Heytech integration
-```
-
-### Make Changes
 ```bash
 # Edit any file in custom_components/heytech/
 vim custom_components/heytech/api.py
-
-# Syntax check (optional)
-python3 -m py_compile custom_components/heytech/api.py
 ```
 
-### Reload Integration
+### 2. Reload Integration
 
-#### Option 1: Script (Recommended)
+**Option A: Script (fastest)**
 ```bash
 ./dev-reload.sh
-# Choose option 1 for quick reload
+# Choose 1 for quick reload
 ```
 
-#### Option 2: Manual Quick Reload
+**Option B: Manual**
 ```bash
 docker exec homeassistant-heytech-test ha core reload
 ```
 
-#### Option 3: Full Restart (if quick reload doesn't work)
+**Option C: Full restart**
 ```bash
 docker-compose restart
 ```
 
-#### Option 4: In Home Assistant UI
-1. Go to **Developer Tools** → **YAML**
-2. Click **Quick Reload** or **Restart**
+**Option D: Home Assistant UI**
+- Developer Tools → YAML → Quick Reload
 
-### View Logs
+### 3. Check Logs
 
 ```bash
 # Follow logs
 docker-compose logs -f homeassistant
 
 # Filter for Heytech
-docker-compose logs -f homeassistant | grep -i heytech
+docker-compose logs -f homeassistant | grep heytech
 
-# Last 50 lines
-docker-compose logs --tail=50 homeassistant
-
-# Only errors
+# Show errors
 docker-compose logs homeassistant | grep -i error
 ```
 
-## File Structure & What to Edit
+### 4. Debug
 
-```
-custom_components/heytech/
-├── __init__.py          # Main entry point, services
-├── api.py               # API client, protocol handling
-├── config_flow.py       # Configuration UI
-├── const.py             # Constants
-├── coordinator.py       # Data update coordinator
-├── cover.py             # Cover entities (shutters, groups)
-├── data.py              # Data models
-├── entity.py            # Base entity class
-├── manifest.json        # Integration metadata
-├── parse_helper.py      # Protocol parsers
-├── scene.py             # Scene entities (scenarios)
-├── sensor.py            # Sensor entities
-└── services.yaml        # Service definitions
-```
-
-### Common Changes
-
-| What You Want | File to Edit |
-|---------------|-------------|
-| Add new command | `parse_helper.py` + `api.py` |
-| Add new sensor | `sensor.py` |
-| Add new service | `services.yaml` + `__init__.py` |
-| Change cover behavior | `cover.py` |
-| Fix parsing | `parse_helper.py` |
-| Add new feature | `api.py` + entity files |
-
-## Testing Changes
-
-### 1. Syntax Check
-```bash
-python3 -m py_compile custom_components/heytech/*.py
-```
-
-### 2. Check Integration Loads
-```bash
-# Reload and check logs
-./dev-reload.sh
-# Choose option 1
-
-# Or manually:
-docker exec homeassistant-heytech-test ha core reload
-docker-compose logs --tail=50 homeassistant | grep heytech
-```
-
-### 3. Test in UI
-1. Go to **Developer Tools** → **States**
-2. Filter by "heytech"
-3. Verify entities appear
-4. Test controls
-
-### 4. Test Services
-1. Go to **Developer Tools** → **Services**
-2. Search for "heytech"
-3. Test service calls
-
-### 5. Check Logs for Errors
-```bash
-docker-compose logs homeassistant | grep -i error | grep -i heytech
-```
-
-## Common Issues & Solutions
-
-### Issue: Integration doesn't reload
-**Solution:**
-```bash
-# Full restart
-docker-compose restart
-
-# Or rebuild
-docker-compose down
-docker-compose up -d
-```
-
-### Issue: Syntax error
-**Solution:**
-```bash
-# Check syntax
-python3 -m py_compile custom_components/heytech/api.py
-
-# View error in logs
-docker-compose logs --tail=100 homeassistant | grep -i error
-```
-
-### Issue: Entity not appearing
-**Solution:**
-```bash
-# Check if integration loaded
-docker-compose logs homeassistant | grep "Heytech"
-
-# Force reload config entry
-# In HA UI: Settings → Devices & Services → Heytech → Reload
-```
-
-### Issue: Changes not visible
-**Solution:**
-```bash
-# Verify files are mounted
-docker exec homeassistant-heytech-test ls -la /config/custom_components/heytech/
-
-# Check file timestamp
-docker exec homeassistant-heytech-test stat /config/custom_components/heytech/api.py
-
-# Force full restart
-docker-compose restart
-```
-
-## Debug Mode
-
-### Enable Debug Logging
-
-Add to `config/configuration.yaml`:
+Enable debug logging in `config/configuration.yaml`:
 ```yaml
 logger:
   default: info
@@ -205,93 +114,158 @@ logger:
     custom_components.heytech.api: debug
 ```
 
-Then reload:
-```bash
-docker exec homeassistant-heytech-test ha core reload
-```
+---
 
-### View Debug Logs
-```bash
-docker-compose logs -f homeassistant | grep -i "custom_components.heytech"
-```
+## Testing
 
-## Performance Testing
-
-### Check API Response Times
-Add to `api.py`:
-```python
-import time
-
-async def some_method(self):
-    start = time.time()
-    # ... your code ...
-    _LOGGER.debug(f"Operation took {time.time() - start:.2f}s")
-```
-
-### Monitor Container Resources
-```bash
-docker stats homeassistant-heytech-test
-```
-
-## Clean Start
+### Syntax Check
 
 ```bash
-# Stop everything
+python3 -m py_compile custom_components/heytech/*.py
+```
+
+### Run Standalone Tests
+
+```bash
+python tests/test_api.py YOUR_IP
+```
+
+**Tests included:**
+1. Connection test
+2. Shutter discovery
+3. Position reading
+4. Climate data
+5. Scenario discovery
+6. Group discovery
+7. Automation status
+8. Logbook access
+
+### Test in Home Assistant
+
+1. **Check Entities**
+   - Developer Tools → States
+   - Filter by "heytech"
+
+2. **Test Services**
+   - Developer Tools → Services
+   - Search "heytech"
+
+3. **Check Integration**
+   - Settings → Devices & Services → Heytech
+
+---
+
+## File Structure
+
+```
+custom_components/heytech/
+├── __init__.py          # Entry point, services
+├── api.py               # Protocol implementation
+├── config_flow.py       # Configuration UI
+├── const.py             # Constants
+├── coordinator.py       # Data updates
+├── cover.py             # Shutter entities
+├── data.py              # Data models
+├── entity.py            # Base entity
+├── manifest.json        # Metadata
+├── parse_helper.py      # Protocol parsers
+├── scene.py             # Scene entities
+├── sensor.py            # Sensor entities
+├── services.yaml        # Service definitions
+└── translations/        # UI translations
+```
+
+### Common Changes
+
+| Task | Files to Edit |
+|------|---------------|
+| Add command | `parse_helper.py`, `api.py` |
+| Add sensor | `sensor.py` |
+| Add service | `services.yaml`, `__init__.py` |
+| Fix parser | `parse_helper.py` |
+| Change behavior | `cover.py`, `sensor.py`, `scene.py` |
+
+---
+
+## Troubleshooting
+
+### Integration Won't Load
+
+```bash
+# Check logs
+docker-compose logs homeassistant | grep -i error
+
+# Restart container
+docker-compose restart
+
+# Check syntax
+python3 -m py_compile custom_components/heytech/*.py
+```
+
+### Changes Not Visible
+
+```bash
+# Verify files are mounted
+docker exec homeassistant-heytech-test ls -la /config/custom_components/heytech/
+
+# Check timestamp
+docker exec homeassistant-heytech-test stat /config/custom_components/heytech/api.py
+
+# Force restart
+docker-compose restart
+```
+
+### Port Not Accessible
+
+If http://localhost:8123 doesn't work:
+
+```bash
+# Check container
+docker ps | grep homeassistant
+
+# Check port mapping
+docker port homeassistant-heytech-test
+
+# Should show: 8123/tcp -> 0.0.0.0:8123
+```
+
+---
+
+## Tips
+
+### Fast Iteration
+
+```bash
+# Check syntax + reload in one command
+python3 -m py_compile custom_components/heytech/*.py && ./dev-reload.sh
+```
+
+### Keep Logs Open
+
+```bash
+# In separate terminal
+docker-compose logs -f homeassistant | grep heytech
+```
+
+### Clean Start
+
+```bash
+# Stop and remove everything
 docker-compose down
-
-# Remove config (⚠️ loses all settings)
-rm -rf config
+rm -rf config/
 
 # Fresh start
 docker-compose up -d
 ```
 
-## Backup & Restore
+---
 
-### Backup Config
-```bash
-tar czf hass-config-backup.tar.gz config/
-```
-
-### Restore Config
-```bash
-tar xzf hass-config-backup.tar.gz
-docker-compose restart
-```
-
-## Quick Commands Reference
-
-```bash
-# Start
-docker-compose up -d
-
-# Stop
-docker-compose down
-
-# Restart
-docker-compose restart
-
-# Logs
-docker-compose logs -f
-
-# Quick reload
-./dev-reload.sh
-
-# Enter container
-docker exec -it homeassistant-heytech-test bash
-
-# Check integration
-docker exec homeassistant-heytech-test ha core check
-
-# View entities
-docker exec homeassistant-heytech-test ha entity list | grep heytech
-```
-
-## CI/CD Integration
+## CI/CD
 
 ### Pre-commit Checks
+
 ```bash
-# Syntax check
+# Syntax
 python3 -m py_compile custom_components/heytech/*.py
 
 # Code style (optional)
@@ -303,56 +277,18 @@ pip install mypy
 mypy custom_components/heytech/
 ```
 
-## VS Code Integration
+---
 
-### Recommended Extensions
-- Python
-- Docker
-- YAML
+## Resources
 
-### settings.json
-```json
-{
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": true,
-  "python.formatting.provider": "black"
-}
-```
+- [Home Assistant Developer Docs](https://developers.home-assistant.io/)
+- [Integration Structure](https://developers.home-assistant.io/docs/creating_component_index/)
+- [Config Flow](https://developers.home-assistant.io/docs/config_entries_config_flow_handler/)
 
-## Tips & Tricks
+---
 
-1. **Keep logs open** while developing:
-   ```bash
-   docker-compose logs -f homeassistant | grep heytech
-   ```
+## Getting Help
 
-2. **Use the reload script** for fastest iteration:
-   ```bash
-   ./dev-reload.sh
-   ```
-
-3. **Check syntax before reload** to avoid crashes:
-   ```bash
-   python3 -m py_compile custom_components/heytech/*.py && ./dev-reload.sh
-   ```
-
-4. **Test standalone** before Docker:
-   ```bash
-   python3 -c "import sys; sys.path.insert(0, '.'); from custom_components.heytech.api import HeytechApiClient; print('OK')"
-   ```
-
-5. **Git commits** after each working feature:
-   ```bash
-   git add -A
-   git commit -m "feat: add XYZ"
-   ```
-
-## Need Help?
-
-Check these files:
-- `README.md` - Features overview
-- `TESTING.md` - Quick tests
-- `CHANGELOG.md` - Implementation details
-- `IMPLEMENTATION_SUMMARY.md` - Complete overview
-
-Happy coding! 🚀
+- Check `CHANGELOG.md` for implemented features
+- See `README.md` for usage
+- Open issue on GitHub for bugs
