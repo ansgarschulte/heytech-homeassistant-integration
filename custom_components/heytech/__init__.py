@@ -170,16 +170,16 @@ async def async_setup_services(
         """Handle the export_shutters_config service call."""
         filename = call.data.get("filename", "heytech_shutters_backup")
         _LOGGER.info("Exporting shutters configuration to %s", filename)
-        
+
         # Get the config entry for this domain
         entries = hass.config_entries.async_entries(DOMAIN)
         if not entries:
             _LOGGER.error("No Heytech config entries found")
             return
-        
+
         entry = entries[0]  # Get first entry
         shutters = entry.options.get(CONF_SHUTTERS, entry.data.get(CONF_SHUTTERS, {}))
-        
+
         # Create export data
         export_data = {
             "version": "1.0",

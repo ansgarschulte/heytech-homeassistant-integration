@@ -693,14 +693,23 @@ class HeytechApiClient:
                             }
                         else:
                             self.groups[group_num]["channels"] = channels
-                        _LOGGER.info("Group %d discovered with channels %s", group_num, channels)
+                        _LOGGER.info(
+                            "Group %d discovered with channels %s",
+                            group_num,
+                            channels,
+                        )
                 elif "start_sgz" in line and "ende_sgz" in line:
-                    # Parse group info from SGZ (contains bitmasks for channel assignments)
+                    # Parse group info from SGZ
+                    # (contains bitmasks for channel assignments)
                     group_data = parse_sgz_group_control_output(line)
                     for group_num, info in group_data.items():
                         self.groups[group_num] = info
-                        _LOGGER.info("Group %d discovered: '%s' with channels %s", 
-                                    group_num, info.get("name"), info.get("channels"))
+                        _LOGGER.info(
+                            "Group %d discovered: '%s' with channels %s",
+                            group_num,
+                            info.get("name"),
+                            info.get("channels"),
+                        )
                 elif START_SLD in line and END_SLD in line:
                     # Parse logbook entry
                     entry = parse_sld_logbook_entry(line)

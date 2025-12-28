@@ -346,7 +346,10 @@ class HeytechOptionsFlowHandler(OptionsFlow):
                 # Save changes immediately
                 self.hass.config_entries.async_update_entry(
                     self._config_entry,
-                    options={**self._config_entry.options, CONF_SHUTTERS: self._shutters},
+                    options={
+                        **self._config_entry.options,
+                        CONF_SHUTTERS: self._shutters,
+                    },
                 )
                 # Reload the integration to apply changes
                 await self.hass.config_entries.async_reload(self._config_entry.entry_id)
@@ -376,13 +379,13 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         """Export shutters configuration."""
         if user_input is not None:
             return await self.async_step_shutter_menu()
-        
+
         # Create export data
         export_data = {
             "version": "1.0",
             "shutters": self._shutters,
         }
-        
+
         export_json = json.dumps(export_data, indent=2)
         
         # Show JSON in a text field for copying

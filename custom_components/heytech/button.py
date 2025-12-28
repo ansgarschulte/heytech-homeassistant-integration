@@ -58,5 +58,5 @@ class HeytechSyncTimeButton(CoordinatorEntity, ButtonEntity):
         try:
             await self._api_client.async_sync_time()
             _LOGGER.info("Time synchronized successfully")
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.error("Failed to sync time: %s", e)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Failed to sync time")
