@@ -1,7 +1,5 @@
 # Docker Compose configuration for testing Heytech integration
 
-version: '3.8'
-
 services:
   homeassistant:
     container_name: homeassistant-heytech-test
@@ -11,8 +9,9 @@ services:
       - ./custom_components:/config/custom_components  # Live code mount
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
-    privileged: true
-    network_mode: host
+    # Port mapping for macOS/Windows (host mode doesn't work there)
+    ports:
+      - "8123:8123"
     environment:
       - TZ=Europe/Berlin
     # Optional: Automatisches Logging für Debugging
