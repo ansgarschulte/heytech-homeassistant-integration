@@ -80,6 +80,9 @@ FULLY_CLOSED = 0
 SOP_INTERVAL = 120  # seconds - Poll position every 2 minutes (was 60)
 SKD_INTERVAL = 300  # seconds - Poll climate every 5 minutes (was 120)
 
+# Channel constants
+SCENARIO_CHANNEL_START = 65  # Scenarios start at channel 65
+
 
 class IntegrationHeytechApiClientError(Exception):
     """Exception to indicate a general API error."""
@@ -637,21 +640,28 @@ class HeytechApiClient:
                     self.shutter_positions = parse_sop_shutter_positions(line)
                 elif START_SMN in line and END_SMN in line:
                     one_shutter = parse_smn_motor_names_output(line)
-                    
-                    # Check if this is a scenario (channel >= 65) or a regular shutter
+
+                    # Check if this is a scenario or a regular shutter
                     for name, data in one_shutter.items():
                         channel = data["channel"]
-                        if channel >= 65:
+                        if channel >= SCENARIO_CHANNEL_START:
                             # This is a scenario, not a shutter
                             scenario_num = channel - 64  # Scenarios start at 1
                             self.scenarios[scenario_num] = name.strip()
-                            _LOGGER.info("Scenario discovered: %d. %s", scenario_num, name.strip())
+                            _LOGGER.info(
+                                "Scenario discovered: %d. %s",
+                                scenario_num,
+                                name.strip(),
+                            )
                         else:
                             # Regular shutter - merge with existing data
-                            self.shutters = {**self.shutters, **{name: {"channel": channel, "name": name}}}
-                    
+                            self.shutters[name] = {
+                                "channel": channel,
+                                "name": name,
+                            }
+
                     # Signal discovery complete when all channels processed
-                    if (self._discovery_complete 
+                    if (self._discovery_complete
                         and self.max_channels 
                         and len(self.shutters) >= self.max_channels):
                         self._discovery_complete.set()

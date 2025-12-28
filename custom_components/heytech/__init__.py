@@ -24,7 +24,12 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall
 
-PLATFORMS: list[Platform] = [Platform.COVER, Platform.SENSOR, Platform.SCENE, Platform.BUTTON]
+PLATFORMS: list[Platform] = [
+    Platform.COVER,
+    Platform.SENSOR,
+    Platform.SCENE,
+    Platform.BUTTON,
+]
 _LOGGER = logging.getLogger(__name__)
 
 # Service schemas
@@ -118,7 +123,7 @@ async def async_setup_entry(
     # Forward setup to the configured platforms (e.g., cover)
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.exception("Failed to forward entry setup to platforms")
         return False
 
@@ -149,7 +154,7 @@ async def async_setup_services(
             {"entries": entries, "count": len(entries)},
         )
 
-    async def handle_clear_logbook(call: ServiceCall) -> None:
+    async def handle_clear_logbook(_call: ServiceCall) -> None:
         """Handle the clear_logbook service call."""
         _LOGGER.info("Clearing logbook")
         await api_client.async_clear_logbook()
