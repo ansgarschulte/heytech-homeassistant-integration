@@ -380,8 +380,15 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
                 # Here, we take the average position
                 new_position = sum(channel_positions) // len(channel_positions)
                 _LOGGER.debug(
-                    "Cover '%s' channels %s: positions from controller %s, calculated new_position=%s, current position=%s, is_moving=%s",
-                    self._name, self._channels, channel_positions, new_position, self._position, (self._is_opening or self._is_closing)
+                    "Cover '%s' channels %s: positions from controller %s, "
+                    "calculated new_position=%s, current position=%s, "
+                    "is_moving=%s",
+                    self._name,
+                    self._channels,
+                    channel_positions,
+                    new_position,
+                    self._position,
+                    (self._is_opening or self._is_closing),
                 )
 
         # Always update position from controller
@@ -393,7 +400,11 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
 
             # If position hasn't changed, movement has stopped
             if not position_changed and (self._is_opening or self._is_closing):
-                _LOGGER.debug("Cover '%s' movement stopped at position %s", self._name, self._position)
+                _LOGGER.debug(
+                    "Cover '%s' movement stopped at position %s",
+                    self._name,
+                    self._position,
+                )
                 self._is_opening = False
                 self._is_closing = False
 

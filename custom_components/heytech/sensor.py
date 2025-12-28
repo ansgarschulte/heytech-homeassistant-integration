@@ -326,7 +326,7 @@ class HeytechAutomationStatusSensor(CoordinatorEntity, BinarySensorEntity):
     def is_on(self) -> bool:
         """
         Return the automation status.
-        
+
         True if external automation is enabled, False otherwise.
         """
         value = self.coordinator.data.get("automation_status")

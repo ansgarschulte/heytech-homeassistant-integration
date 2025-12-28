@@ -188,12 +188,15 @@ async def async_setup_services(
         }
 
         # Save to file in Home Assistant's config directory
-        import os
-        filepath = os.path.join(hass.config.path(), f"{filename}.json")
+        from pathlib import Path
+
+        filepath = Path(hass.config.path()) / f"{filename}.json"
 
         try:
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            filepath.write_text(
+                json.dumps(export_data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
 
             _LOGGER.info("Exported %d custom shutters to %s", len(shutters), filepath)
 
@@ -222,8 +225,8 @@ async def async_setup_services(
                     "shutters_count": len(shutters),
                 },
             )
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.error("Failed to export configuration: %s", e)
+        except Exception:
+            _LOGGER.exception("Failed to export configuration")
 
             # Show error notification
             await hass.services.async_call(
@@ -231,9 +234,8 @@ async def async_setup_services(
                 "create",
                 {
                     "message": (
-                        f"Failed to export configuration!\n\n"
-                        f"**Error:** {e}\n\n"
-                        f"Check the logs for more details."
+                        "Failed to export configuration!\n\n"
+                        "Check the logs for more details."
                     ),
                     "title": "Heytech Export Failed",
                     "notification_id": "heytech_export_failed",
@@ -242,7 +244,7 @@ async def async_setup_services(
 
             hass.bus.async_fire(
                 "heytech_config_export_failed",
-                {"error": str(e)},
+                {"error": "Export failed"},
             )
 
     async def handle_import_shutters(call: ServiceCall) -> None:
@@ -283,11 +285,11 @@ async def async_setup_services(
             )
             _LOGGER.info("Imported %d custom shutters successfully", len(shutters))
 
-        except json.JSONDecodeError as e:
-            _LOGGER.error("Failed to parse JSON: %s", e)
+        except json.JSONDecodeError:
+            _LOGGER.exception("Failed to parse JSON")
             hass.bus.async_fire(
                 "heytech_config_import_failed",
-                {"error": f"Invalid JSON: {e}"},
+                {"error": "Invalid JSON"},
             )
 
     async def handle_sync_time(_call: ServiceCall) -> None:
@@ -312,15 +314,15 @@ async def async_setup_services(
             )
 
             hass.bus.async_fire("heytech_time_synced")
-        except Exception as e:  # noqa: BLE001
-            _LOGGER.error("Failed to sync time: %s", e)
+        except Exception:
+            _LOGGER.exception("Failed to sync time")
 
             # Show error notification
             await hass.services.async_call(
                 "persistent_notification",
                 "create",
                 {
-                    "message": f"Failed to sync time: {e}",
+                    "message": "Failed to sync time. Check the logs for details.",
                     "title": "Heytech Time Sync Failed",
                     "notification_id": "heytech_time_sync_failed",
                 },
@@ -328,7 +330,7 @@ async def async_setup_services(
 
             hass.bus.async_fire(
                 "heytech_time_sync_failed",
-                {"error": str(e)},
+                {"error": "Time sync failed"},
             )
 
     # Register services only once

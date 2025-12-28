@@ -169,7 +169,7 @@ class HeytechApiClient:
     async def _send_initialization_sequence(self) -> None:
         """
         Send initialization sequence to wake up controller.
-        
+
         The HeyTech controller requires RHI (Hand-Steuerung Initialisierung)
         after boot/restart before it responds to regular commands.
         This is what the original HEYcontrol.exe does on connect.
@@ -419,7 +419,7 @@ class HeytechApiClient:
     async def async_activate_scenario(self, scenario_number: int) -> None:
         """
         Activate a scenario by number.
-        
+
         :param scenario_number: The scenario number to activate (1-based)
         """
         _LOGGER.info("Activating scenario %d", scenario_number)
@@ -445,7 +445,7 @@ class HeytechApiClient:
     async def async_control_group(self, group_number: int, action: str) -> None:
         """
         Control a group of shutters.
-        
+
         :param group_number: The group number (1-based)
         :param action: Action to perform ('open', 'close', 'stop', or position 0-100)
         """
@@ -472,7 +472,7 @@ class HeytechApiClient:
     async def async_read_logbook(self, max_entries: int = 50) -> list[dict[str, Any]]:
         """
         Read logbook entries from the device.
-        
+
         :param max_entries: Maximum number of entries to read
         :return: List of logbook entries
         """
@@ -495,7 +495,7 @@ class HeytechApiClient:
         _LOGGER.info("Clearing logbook")
         commands = ["sll\r\n"]
         if self._pin:
-            commands = ["rsc\r\n", f"{self._pin}\r\n"] + commands
+            commands = ["rsc\r\n", f"{self._pin}\r\n", *commands]
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
@@ -517,7 +517,7 @@ class HeytechApiClient:
 
         commands = [f"rdt{time_data}\r\n"]
         if self._pin:
-            commands = ["rsc\r\n", f"{self._pin}\r\n"] + commands
+            commands = ["rsc\r\n", f"{self._pin}\r\n", *commands]
 
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
@@ -547,7 +547,7 @@ class HeytechApiClient:
     async def _process_commands(self) -> None:
         """
         Process commands from the queues, prioritizing normal commands.
-        
+
         User commands have absolute priority - they interrupt periodic commands.
         This ensures responsive control even when periodic polling is active.
         """

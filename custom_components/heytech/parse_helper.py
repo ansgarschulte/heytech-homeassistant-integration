@@ -193,10 +193,10 @@ def _parse_string_output(line: str, start_command: str, stop_command: str) -> st
 def parse_szn_scenario_names_output(line: str) -> dict[int, str]:
     """
     Parse scenario names from the 'szn' or 'rzn' command.
-    
+
     Example response: 'start_rzn1,Scenario Name,1,ende_rzn'
     Returns dict with scenario number as key and name as value.
-    
+
     Note: The correct receive command is RZN, not SZN!
     SZN is the send command, RZN is receive.
     """
@@ -225,7 +225,7 @@ def parse_szn_scenario_names_output(line: str) -> dict[int, str]:
 def parse_ssz_scenarios_output(line: str) -> dict[int, dict[str, Any]]:
     """
     Parse scenario configuration from the 'ssz' command.
-    
+
     Example response: 'start_ssz1,50,60,70,...ende_ssz'
     Returns dict with scenario number and channel positions.
     """
@@ -253,7 +253,7 @@ def parse_ssz_scenarios_output(line: str) -> dict[int, dict[str, Any]]:
 def parse_sau_automation_status(line: str) -> bool | None:
     """
     Parse automation status from the 'sau' command.
-    
+
     Example response: 'start_sau1ende_sau' (1=enabled, 0=disabled)
     Returns True if automation is enabled, False if disabled, None on error.
     """
@@ -268,11 +268,11 @@ def parse_sau_automation_status(line: str) -> bool | None:
 def parse_rgz_group_assignments(line: str) -> dict[int, list[int]]:
     """
     Parse group channel assignments from the 'rgz' command.
-    
+
     Example response: 'start_rgz1,1,2,3,0,0,0,...ende_rgz'
     The controller sends one line per group with assigned channels.
     0 values mean no channel assigned.
-    
+
     Returns dict with group number as key and list of channel numbers as value.
     """
     groups = {}
@@ -308,14 +308,14 @@ def parse_sgr_groups_output(line: str) -> dict[int, list[int]]:
 def parse_sgz_group_control_output(line: str) -> dict[int, dict[str, Any]]:
     """
     Parse group control settings from the 'sgz' command.
-    
+
     Real data shows: 'start_sgz1,255,63,0,0,319,ende_sgz'
-    
+
     The numbers appear to be bitmasks for channel assignments:
     - 255 (0xFF) = channels 1-8
     - 63 (0x3F) = channels 9-14
     etc.
-    
+
     Returns dict with group number and extracted channel list + name.
     """
     group_info = {}
@@ -362,7 +362,7 @@ def parse_sgz_group_control_output(line: str) -> dict[int, dict[str, Any]]:
 def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
     """
     Parse logbook entry from the 'sld' command.
-    
+
     Example response: 'start_sld1;Living Room;2024-12-27;09:15:30;up;Manual,ende_sld'
     Returns dict with logbook entry details.
     """
@@ -392,7 +392,7 @@ def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
 def parse_sla_logbook_count(line: str) -> int:
     """
     Parse number of logbook entries from the 'sla' command.
-    
+
     Example response: 'start_sla150ende_sla'
     Returns number of entries.
     """
@@ -406,7 +406,7 @@ def parse_sla_logbook_count(line: str) -> int:
 def parse_sjp_jalousie_params(line: str) -> dict[str, Any] | None:
     """
     Parse jalousie parameters from the 'sjp' command.
-    
+
     Example response: 'start_sjp1,50,30,1,ende_sjp'
     Channel, tilt open angle, tilt close angle, tilt enabled
     """
@@ -432,7 +432,7 @@ def parse_sjp_jalousie_params(line: str) -> dict[str, Any] | None:
 def parse_sfs_fixed_schedule(line: str) -> dict[str, Any] | None:
     """
     Parse fixed schedule from the 'sfs' command.
-    
+
     Example response: 'start_sfs1,08:00,down,20:00,up,1,ende_sfs'
     """
     if START_SFS in line and END_SFS in line:
@@ -459,7 +459,7 @@ def parse_sfs_fixed_schedule(line: str) -> dict[str, Any] | None:
 def parse_sbp_shading_params(line: str) -> dict[str, Any] | None:
     """
     Parse shading parameters from the 'sbp' command.
-    
+
     Example response: 'start_sbp1,50,30,1,ende_sbp'
     Channel, brightness threshold, position, enabled
     """
@@ -485,7 +485,7 @@ def parse_sbp_shading_params(line: str) -> dict[str, Any] | None:
 def parse_automation_params(line: str, start_marker: str, end_marker: str) -> dict[str, Any] | None:
     """
     Generic parser for automation parameters (dawn, dusk, wind, rain).
-    
+
     Common format: 'start_XXX1,threshold,action,enabled,ende_XXX'
     """
     if start_marker in line and end_marker in line:
