@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Added
 
+#### Backup & Restore (NEW!)
+- **Export Configuration** - Backup custom shutters via UI or service
+  - Options flow: Export/Import menu items
+  - Service: `heytech.export_shutters_config`
+  - JSON format for easy editing
+  
+- **Import Configuration** - Restore custom shutters via UI or service
+  - Options flow: Import from JSON
+  - Service: `heytech.import_shutters_config`
+  - Merge or replace existing configuration
+
 #### Core Features
 - **Scene Support** - Automatic discovery and activation of Heytech scenarios
   - Commands: `szn` (scenario names), `rsa` (activate)
@@ -55,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `heytech.read_logbook` - Read up to 500 logbook entries
   - Fires `heytech_logbook_read` event
 - `heytech.clear_logbook` - Clear all logbook entries
+- `heytech.export_shutters_config` - Export custom shutters configuration
+- `heytech.import_shutters_config` - Import custom shutters configuration
 
 #### Developer Tools
 - **Docker Test Environment** - Complete local testing setup

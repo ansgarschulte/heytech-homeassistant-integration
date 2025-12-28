@@ -7,6 +7,7 @@ setting up Heytech devices in Home Assistant.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -228,6 +229,10 @@ class HeytechOptionsFlowHandler(OptionsFlow):
                 return await self.async_step_add_shutter()
             if menu_option == "remove_shutter":
                 return await self.async_step_remove_shutter()
+            if menu_option == "export_config":
+                return await self.async_step_export_config()
+            if menu_option == "import_config":
+                return await self.async_step_import_config()
             if menu_option == "finish":
                 # Check if shutters have changed
                 original_shutters = self._config_entry.options.get(
@@ -243,6 +248,8 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         options = [
             ("add_shutter", "Add Shutter"),
             ("remove_shutter", "Remove Shutter"),
+            ("export_config", "Export Configuration"),
+            ("import_config", "Import Configuration"),
             ("finish", "Finish"),
         ]
         data_schema = vol.Schema(
@@ -346,5 +353,71 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         return self.async_show_form(
             step_id="remove_shutter",
             data_schema=data_schema,
+            errors=errors,
+        )
+
+    async def async_step_export_config(
+        self, user_input: dict[str, Any] | None = None
+    ) -> data_entry_flow.FlowResult:
+        """Export shutters configuration."""
+        if user_input is not None:
+            return await self.async_step_shutter_menu()
+        
+        # Create export data
+        export_data = {
+            "version": "1.0",
+            "shutters": self._shutters,
+        }
+        
+        export_json = json.dumps(export_data, indent=2)
+        
+        # Show export data to user
+        return self.async_show_form(
+            step_id="export_config",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "config_data": export_json,
+                "count": str(len(self._shutters)),
+            },
+        )
+
+    async def async_step_import_config(
+        self, user_input: dict[str, Any] | None = None
+    ) -> data_entry_flow.FlowResult:
+        """Import shutters configuration."""
+        errors: dict[str, str] = {}
+        
+        if user_input is not None:
+            try:
+                # Parse JSON data
+                import_data = json.loads(user_input["config_data"])
+                
+                if "shutters" not in import_data:
+                    errors["config_data"] = "invalid_format"
+                else:
+                    # Validate shutters format
+                    shutters = import_data["shutters"]
+                    if not isinstance(shutters, dict):
+                        errors["config_data"] = "invalid_format"
+                    else:
+                        # Merge imported shutters with existing ones
+                        self._shutters.update(shutters)
+                        return await self.async_step_shutter_menu()
+                        
+            except json.JSONDecodeError:
+                errors["config_data"] = "invalid_json"
+        
+        return self.async_show_form(
+            step_id="import_config",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("config_data"): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.TEXT,
+                            multiline=True,
+                        ),
+                    ),
+                }
+            ),
             errors=errors,
         )

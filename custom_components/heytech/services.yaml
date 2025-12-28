@@ -41,3 +41,26 @@ control_group:
             - "open"
             - "close"
             - "stop"
+
+export_shutters_config:
+  name: Export Shutters Configuration
+  description: Export custom shutters configuration to a downloadable file
+  fields:
+    filename:
+      name: Filename
+      description: Name of the export file (without extension)
+      default: "heytech_shutters_backup"
+      selector:
+        text:
+
+import_shutters_config:
+  name: Import Shutters Configuration
+  description: Import custom shutters configuration from JSON data
+  fields:
+    config_data:
+      name: Configuration Data
+      description: JSON configuration data to import
+      required: true
+      selector:
+        text:
+          multiline: true

@@ -98,6 +98,42 @@ data:
   action: "open"  # or "close", "stop", 0-100
 ```
 
+**Export Shutters Configuration**
+```yaml
+service: heytech.export_shutters_config
+data:
+  filename: "my_backup"
+```
+
+**Import Shutters Configuration**
+```yaml
+service: heytech.import_shutters_config
+data:
+  config_data: |
+    {
+      "version": "1.0",
+      "shutters": {
+        "Living Room": "1,2,3",
+        "Bedroom": "4,5"
+      }
+    }
+```
+
+---
+
+## Backup & Restore
+
+### Via UI (Options)
+1. **Settings** → **Devices & Services** → **Heytech**
+2. Click **Configure** (3 dots menu)
+3. Choose **Export Configuration** to backup
+4. Choose **Import Configuration** to restore
+
+### Via Services
+- Use `heytech.export_shutters_config` service
+- Use `heytech.import_shutters_config` service
+- Configuration is JSON format for easy editing
+
 ---
 
 ## Testing
