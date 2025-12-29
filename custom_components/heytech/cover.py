@@ -363,7 +363,9 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         positions = self.coordinator.data.get("shutter_positions", {})
         _LOGGER.debug(
             "Cover '%s' update: all positions=%s, channels=%s",
-            self._name, positions, self._channels
+            self._name,
+            positions,
+            self._channels,
         )
 
         # Get new position from controller

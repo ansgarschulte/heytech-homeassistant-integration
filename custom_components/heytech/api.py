@@ -362,13 +362,12 @@ class HeytechApiClient:
                 # Event-based: wait until all shutters discovered or timeout
                 try:
                     await asyncio.wait_for(
-                        self._discovery_complete.wait(),
-                        timeout=10.0
+                        self._discovery_complete.wait(), timeout=10.0
                     )
                     _LOGGER.debug(
                         "Discovery complete: %d/%d shutters found",
                         len(self.shutters),
-                        self.max_channels
+                        self.max_channels,
                     )
                 except TimeoutError:
                     _LOGGER.warning(
@@ -426,10 +425,12 @@ class HeytechApiClient:
         commands = []
         if self._pin:
             commands.extend(["rsc\r\n", f"{self._pin}\r\n"])
-        commands.extend([
-            "rsa\r\n",
-            f"{scenario_number}\r\n",
-        ])
+        commands.extend(
+            [
+                "rsa\r\n",
+                f"{scenario_number}\r\n",
+            ]
+        )
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
@@ -585,7 +586,7 @@ class HeytechApiClient:
                             _LOGGER.debug(
                                 "Sending %s command: %s",
                                 "USER" if is_user_command else "periodic",
-                                command.strip()
+                                command.strip(),
                             )
                             self.writer.write(command.encode("ascii"))
                             await self.writer.drain()
@@ -655,9 +656,11 @@ class HeytechApiClient:
                             }
 
                     # Signal discovery complete when all channels processed
-                    if (self._discovery_complete
+                    if (
+                        self._discovery_complete
                         and self.max_channels
-                        and len(self.shutters) >= self.max_channels):
+                        and len(self.shutters) >= self.max_channels
+                    ):
                         self._discovery_complete.set()
                 elif START_SMC in line and END_SMC in line:
                     self.max_channels = parse_smc_max_channel_output(line)
@@ -683,7 +686,7 @@ class HeytechApiClient:
                             # Generate a default name
                             self.groups[group_num] = {
                                 "name": f"Group {group_num}",
-                                "channels": channels
+                                "channels": channels,
                             }
                         else:
                             self.groups[group_num]["channels"] = channels

@@ -240,11 +240,8 @@ def parse_ssz_scenarios_output(line: str) -> dict[int, dict[str, Any]]:
         if len(parts) > 0:
             try:
                 scenario_num = int(parts[0])
-                positions = [int(p) if p.strip().isdigit() else None
-                           for p in parts[1:]]
-                scenarios[scenario_num] = {
-                    "positions": positions
-                }
+                positions = [int(p) if p.strip().isdigit() else None for p in parts[1:]]
+                scenarios[scenario_num] = {"positions": positions}
             except (ValueError, IndexError):
                 _LOGGER.warning("Failed to parse scenario data: %s", line)
     return scenarios
@@ -358,12 +355,13 @@ def parse_sgz_group_control_output(line: str) -> dict[int, dict[str, Any]]:
 
                 if channels:
                     name = f"Group {group_num}"
-                    group_info[group_num] = {
-                        "name": name,
-                        "channels": channels
-                    }
-                    _LOGGER.debug("Parsed SGZ group %d: name='%s', channels=%s",
-                                 group_num, name, channels)
+                    group_info[group_num] = {"name": name, "channels": channels}
+                    _LOGGER.debug(
+                        "Parsed SGZ group %d: name='%s', channels=%s",
+                        group_num,
+                        name,
+                        channels,
+                    )
         except (ValueError, IndexError) as e:
             _LOGGER.warning("Failed to parse SGZ data: %s, error: %s", line, e)
     return group_info
@@ -508,9 +506,7 @@ def parse_automation_params(
         parts = data_str.split(",")
         if len(parts) >= 4:
             try:
-                threshold = (
-                    int(parts[1]) if parts[1].isdigit() else parts[1].strip()
-                )
+                threshold = int(parts[1]) if parts[1].isdigit() else parts[1].strip()
                 return {
                     "channel": int(parts[0]),
                     "threshold": threshold,

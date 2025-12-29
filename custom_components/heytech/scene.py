@@ -56,9 +56,7 @@ async def async_setup_entry(
     for scenario_num, scenario_name in scenarios.items():
         unique_id = f"{entry.entry_id}_scenario_{scenario_num}"
         _LOGGER.info("Adding scene '%s' (number %d)", scenario_name, scenario_num)
-        scenes.append(
-            HeytechScene(scenario_name, scenario_num, api_client, unique_id)
-        )
+        scenes.append(HeytechScene(scenario_name, scenario_num, api_client, unique_id))
 
     async_add_entities(scenes)
     _LOGGER.info("Successfully added %d Heytech scenes", len(scenes))

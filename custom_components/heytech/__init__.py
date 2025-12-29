@@ -304,8 +304,7 @@ async def async_setup_services(
                 "create",
                 {
                     "message": (
-                        "Time synchronized successfully "
-                        "with Heytech controller."
+                        "Time synchronized successfully with Heytech controller."
                     ),
                     "title": "Heytech Time Sync",
                     "notification_id": "heytech_time_sync_success",

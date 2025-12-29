@@ -391,14 +391,18 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         # Show JSON in a text field for copying
         return self.async_show_form(
             step_id="export_config",
-            data_schema=vol.Schema({
-                vol.Optional("export_data", default=export_json): selector.TextSelector(
-                    selector.TextSelectorConfig(
-                        type=selector.TextSelectorType.TEXT,
-                        multiline=True,
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        "export_data", default=export_json
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.TEXT,
+                            multiline=True,
+                        ),
                     ),
-                ),
-            }),
+                }
+            ),
             description_placeholders={
                 "count": str(len(self._shutters)),
             },

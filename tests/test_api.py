@@ -27,16 +27,25 @@ import importlib.util
 
 spec = importlib.util.spec_from_file_location(
     "heytech_api",
-    Path(__file__).parent.parent / "custom_components" / "heytech" / "api.py"
+    Path(__file__).parent.parent / "custom_components" / "heytech" / "api.py",
 )
 heytech_api = importlib.util.module_from_spec(spec)
 
+
 # Mock only what's needed
 class MockLogger:
-    def debug(self, *args, **kwargs) -> None: pass
-    def info(self, *args, **kwargs) -> None: pass
-    def warning(self, *args, **kwargs) -> None: pass
-    def error(self, *args, **kwargs) -> None: pass
+    def debug(self, *args, **kwargs) -> None:
+        pass
+
+    def info(self, *args, **kwargs) -> None:
+        pass
+
+    def warning(self, *args, **kwargs) -> None:
+        pass
+
+    def error(self, *args, **kwargs) -> None:
+        pass
+
 
 sys.modules["custom_components"] = type(sys)("custom_components")
 sys.modules["custom_components.heytech"] = type(sys)("heytech")
@@ -46,7 +55,7 @@ sys.modules["custom_components.heytech.const"].LOGGER = MockLogger()
 # Load parse_helper first
 parse_spec = importlib.util.spec_from_file_location(
     "parse_helper",
-    Path(__file__).parent.parent / "custom_components" / "heytech" / "parse_helper.py"
+    Path(__file__).parent.parent / "custom_components" / "heytech" / "parse_helper.py",
 )
 parse_helper = importlib.util.module_from_spec(parse_spec)
 parse_spec.loader.exec_module(parse_helper)
@@ -167,9 +176,9 @@ async def run_all_tests(host: str, port: int = 1002, pin: str = "") -> None:
 
         await test_logbook(client)
 
-
     except Exception:
         import traceback
+
         traceback.print_exc()
     finally:
         await client.stop()
@@ -187,7 +196,7 @@ Examples:
   python tests/test_api.py 192.168.1.100
   python tests/test_api.py 192.168.1.100 --pin 1234
   python tests/test_api.py 10.0.1.6 --port 1002
-        """
+        """,
     )
     parser.add_argument("host", help="Heytech controller IP address")
     parser.add_argument("--port", type=int, default=1002, help="Port (default: 1002)")
