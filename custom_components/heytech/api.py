@@ -16,12 +16,15 @@ from custom_components.heytech.parse_helper import (
     END_RZN,
     END_SAU,
     END_SBP,
+    END_SFI,
+    END_SGN,
     END_SJP,
     END_SKD,
     END_SLA,
     END_SLD,
     END_SMC,
     END_SMN,
+    END_SMO,
     END_SOP,
     END_SRP,
     END_SWP,
@@ -30,12 +33,15 @@ from custom_components.heytech.parse_helper import (
     START_RZN,
     START_SAU,
     START_SBP,
+    START_SFI,
+    START_SGN,
     START_SJP,
     START_SKD,
     START_SLA,
     START_SLD,
     START_SMC,
     START_SMN,
+    START_SMO,
     START_SOP,
     START_SRP,
     START_SWP,
@@ -43,6 +49,8 @@ from custom_components.heytech.parse_helper import (
     parse_rgz_group_assignments,
     parse_sau_automation_status,
     parse_sbp_shading_params,
+    parse_sfi_firmware_output,
+    parse_sgn_device_number_output,
     parse_sgz_group_control_output,
     parse_sjp_jalousie_params,
     parse_skd_climate_data,
@@ -50,6 +58,7 @@ from custom_components.heytech.parse_helper import (
     parse_sld_logbook_entry,
     parse_smc_max_channel_output,
     parse_smn_motor_names_output,
+    parse_smo_model_output,
     parse_sop_shutter_positions,
     parse_srp_rain_params,
     parse_swp_wind_params,
@@ -130,6 +139,7 @@ class HeytechApiClient:
         self.shading_params: dict[int, dict[str, Any]] = {}  # Channel -> params
         self.wind_params: dict[int, dict[str, Any]] = {}  # Channel -> params
         self.rain_params: dict[int, dict[str, Any]] = {}  # Channel -> params
+        self.system_info: dict[str, str] = {}  # Model, firmware, device number
         self._reconnecting = False
         self._discovery_complete: asyncio.Event | None = None
 
@@ -326,6 +336,9 @@ class HeytechApiClient:
             await self.add_command("smc", [])
             # Controller auto-iterates ALL channels including scenarios
             await self.add_command("smn", [])
+            await self.add_command("smo", [])  # Get model info
+            await self.add_command("sfi", [])  # Get firmware version
+            await self.add_command("sgn", [])  # Get device number
             await self.add_command("sop", [])
             await self.add_command("skd", [])
             await self.add_command("sau", [])  # Get automation status
@@ -450,6 +463,10 @@ class HeytechApiClient:
     def get_automation_status(self) -> bool | None:
         """Return the automation status (external switch state)."""
         return self.automation_status
+
+    def get_system_info(self) -> dict[str, str]:
+        """Return system information (model, firmware, device number)."""
+        return self.system_info
 
     def get_groups(self) -> dict[int, dict[str, Any]]:
         """Return the available groups."""
@@ -751,6 +768,21 @@ class HeytechApiClient:
                     if params:
                         channel = params.pop("channel")
                         self.rain_params[channel] = params
+                elif START_SMO in line and END_SMO in line:
+                    # Parse model info
+                    model = parse_smo_model_output(line)
+                    self.system_info["model"] = model
+                    _LOGGER.debug("Model info: %s", model)
+                elif START_SFI in line and END_SFI in line:
+                    # Parse firmware version
+                    firmware = parse_sfi_firmware_output(line)
+                    self.system_info["firmware"] = firmware
+                    _LOGGER.debug("Firmware version: %s", firmware)
+                elif START_SGN in line and END_SGN in line:
+                    # Parse device number
+                    device_number = parse_sgn_device_number_output(line)
+                    self.system_info["device_number"] = device_number
+                    _LOGGER.debug("Device number: %s", device_number)
             except asyncio.CancelledError as e:
                 _LOGGER.debug("Read task cancelled: %s", e)
                 await self.disconnect()

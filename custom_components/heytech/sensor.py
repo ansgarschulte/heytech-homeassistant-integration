@@ -94,6 +94,13 @@ async def async_setup_entry(
         HeytechLogbookCountSensor(coordinator, "logbook_count", logbook_unique_id)
     )
 
+    # Add system info sensors
+    system_info_keys = ["model", "firmware", "device_number"]
+    for key in system_info_keys:
+        unique_id = f"{entry.entry_id}_system_{key}"
+        current_unique_ids.add(unique_id)
+        entities.append(HeytechSystemInfoSensor(coordinator, key, unique_id))
+
     async_add_entities(entities)
 
     # Remove entities and devices that are no longer in the configuration
@@ -371,6 +378,46 @@ class HeytechLogbookCountSensor(CoordinatorEntity, SensorEntity):
     def native_unit_of_measurement(self) -> str:
         """Return the unit of measurement."""
         return "entries"
+
+
+class HeytechSystemInfoSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for system information (model, firmware, device number)."""
+
+    def __init__(
+        self, coordinator: DataUpdateCoordinator, info_type: str, unique_id: str
+    ) -> None:
+        """Initialize the sensor with the coordinator and info type."""
+        super().__init__(coordinator)
+        self._info_type = info_type
+        self._attr_unique_id = unique_id
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        name_map = {
+            "model": "Model",
+            "firmware": "Firmware Version",
+            "device_number": "Device Number",
+        }
+        return name_map.get(self._info_type, self._info_type.capitalize())
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the system info value."""
+        system_info = self.coordinator.data.get("system_info", {})
+        value = system_info.get(self._info_type)
+        _LOGGER.debug("System info sensor %s has value %s", self._info_type, value)
+        return value if value else "Unknown"
+
+    @property
+    def icon(self) -> str:
+        """Return the icon to use in the frontend."""
+        icon_map = {
+            "model": "mdi:chip",
+            "firmware": "mdi:package-variant",
+            "device_number": "mdi:identifier",
+        }
+        return icon_map.get(self._info_type, "mdi:information")
 
 
 async def _async_cleanup_entities_and_devices(

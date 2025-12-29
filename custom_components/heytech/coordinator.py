@@ -32,6 +32,7 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
         self.api_client = api_client
         self.shutter_positions: dict[int, int] = {}
         self.climate_data: dict[str, str] = {}
+        self.system_info: dict[str, str] = {}
 
     async def _async_setup(self) -> None:
         """
@@ -61,6 +62,7 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             climate_data = self.api_client.get_climate_data()
             automation_status = self.api_client.get_automation_status()
             logbook_count = self.api_client.get_logbook_count()
+            system_info = self.api_client.get_system_info()
 
             if not positions:
                 _LOGGER.warning("No shutter positions received.")
@@ -78,6 +80,9 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
                 result["automation_status"] = automation_status
             if logbook_count is not None:
                 result["logbook_count"] = logbook_count
+            if system_info:
+                self.system_info = system_info
+                result["system_info"] = system_info
         except Exception as exception:
             error_message = f"Error fetching shutter positions: {exception}"
             LOGGER.error(error_message)

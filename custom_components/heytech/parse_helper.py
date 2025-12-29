@@ -22,6 +22,8 @@ START_SMO = "start_smo"
 END_SMO = "ende_smo"
 START_SFI = "start_sfi"
 END_SFI = "ende_sfi"
+START_SGN = "start_sgn"
+END_SGN = "ende_sgn"
 START_SZN = "start_szn"
 END_SZN = "ende_szn"
 START_RZN = "start_rzn"
@@ -175,10 +177,16 @@ def parse_smo_model_output(line: str) -> str:
     return _parse_string_output(line, START_SMO, END_SMO)
 
 
-def parse_sfi_model_output(line: str) -> str:
+def parse_sfi_firmware_output(line: str) -> str:
     """Parse the output of the 'sfi' command."""
     # Example response: 'start_sfi8.027rende_sfi
     return _parse_string_output(line, START_SFI, END_SFI)
+
+
+def parse_sgn_device_number_output(line: str) -> str:
+    """Parse the output of the 'sgn' command."""
+    # Example response: 'start_sgn12345ende_sgn'
+    return _parse_string_output(line, START_SGN, END_SGN)
 
 
 def _parse_string_output(line: str, start_command: str, stop_command: str) -> str:

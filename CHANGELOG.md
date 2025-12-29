@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### 🚀 Added
+- **System Information Sensors** - Display hardware and software details as sensors (#10)
+  - Model sensor (`sensor.model`) - Shows device model (e.g., "HEYtech RS879M")
+  - Firmware sensor (`sensor.firmware_version`) - Shows firmware version (e.g., "8.027r")
+  - Device Number sensor (`sensor.device_number`) - Shows device serial number
+  - Commands: `smo` (model), `sfi` (firmware), `sgn` (device number)
+  - Auto-populated during device discovery
+  - Displayed in Home Assistant device info
+
 ## [1.5.0] - 2025-12-28
 
 🎉 **MAJOR RELEASE** - Complete feature set with all community-requested features!

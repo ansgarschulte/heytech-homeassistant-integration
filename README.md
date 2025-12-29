@@ -73,6 +73,9 @@ Required:
 - `binary_sensor.alarm`
 - `binary_sensor.automation_status`
 - `sensor.logbook_entries`
+- `sensor.model` - Device model (e.g., "HEYtech RS879M")
+- `sensor.firmware_version` - Firmware version (e.g., "8.027r")
+- `sensor.device_number` - Device serial number
 
 **Scenes** (if configured on controller)
 - `scene.morning`, `scene.evening`, etc.
