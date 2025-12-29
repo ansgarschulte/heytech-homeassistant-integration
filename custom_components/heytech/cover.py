@@ -54,6 +54,7 @@ async def async_setup_entry(
     # Fetch dynamic shutters from the API
     await api_client.async_read_heytech_data()
     dynamic_shutters = api_client.shutters  # Get parsed shutters from the API
+    groups = api_client.get_groups()  # Get parsed groups from the API
 
     # Limit the number of dynamic shutters
     max_auto_shutters = int(
@@ -72,12 +73,13 @@ async def async_setup_entry(
         CONF_SHUTTERS, entry.data.get(CONF_SHUTTERS, {})
     )
 
-    # Merge configured shutters with normalized and limited dynamic shutters
-    all_shutters = {**configured_shutters, **normalized_dynamic_shutters}
+    # Merge dynamic shutters with configured shutters (both are kept)
+    all_shutters = {**normalized_dynamic_shutters, **configured_shutters}
 
     covers = []
     current_unique_ids: set[str] = set()
 
+    # Add individual shutter covers
     for name, channels in all_shutters.items():
         try:
             # Ensure channels are parsed into a list of integers
@@ -97,6 +99,27 @@ async def async_setup_entry(
         covers.append(
             HeytechCover(name, channel_list, api_client, unique_id, coordinator)
         )
+
+    # Add group covers
+    for group_num, group_info in groups.items():
+        group_name = group_info.get("name", f"Group {group_num}")
+        group_channels = group_info.get("channels", [])
+        if group_channels:
+            unique_id = f"{entry.entry_id}_group_{group_num}"
+            current_unique_ids.add(unique_id)
+            _LOGGER.info(
+                "Adding group cover '%s' with channels %s", group_name, group_channels
+            )
+            covers.append(
+                HeytechGroupCover(
+                    group_name,
+                    group_num,
+                    group_channels,
+                    api_client,
+                    unique_id,
+                    coordinator,
+                )
+            )
 
     # Add new entities
     async_add_entities(covers)
@@ -159,6 +182,10 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         | CoverEntityFeature.CLOSE
         | CoverEntityFeature.STOP
         | CoverEntityFeature.SET_POSITION
+        | CoverEntityFeature.OPEN_TILT
+        | CoverEntityFeature.CLOSE_TILT
+        | CoverEntityFeature.STOP_TILT
+        | CoverEntityFeature.SET_TILT_POSITION
     )
 
     def __init__(
@@ -183,6 +210,7 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         self._attr_unique_id = unique_id
         self._prev_position: int | None = None  # Current position
         self._position: int | None = None  # Current position
+        self._tilt_position: int | None = None  # Current tilt position (for jalousie)
         self._is_opening: bool = False
         self._is_closing: bool = False
         if self._is_awning:
@@ -218,8 +246,8 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
                 "Cover '%s' position is unknown. Assuming not closed.", self._name
             )
             return False  # Unknown state
-        if self._is_awning:
-            return self._position == MAX_POSITION
+        # For Heytech: position 0 = closed, position 100 = open
+        # So is_closed is True when position is at minimum (0)
         return self._position == MIN_POSITION
 
     @property
@@ -227,23 +255,57 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         """Return the current position of the cover."""
         return self._position
 
+    @property
+    def current_cover_tilt_position(self) -> int | None:
+        """Return the current tilt position of the cover."""
+        return self._tilt_position
+
+    async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
+        """Set the tilt position of the cover."""
+        tilt_position = kwargs.get("tilt_position")
+        if tilt_position is None:
+            _LOGGER.error("Tilt position not provided.")
+            return
+        _LOGGER.info("Setting tilt position of %s to %s%%", self._name, tilt_position)
+        try:
+            # Send tilt command - format: "t{position}" for tilt
+            await self._api_client.add_command(f"t{tilt_position}", self._channels)
+            self._tilt_position = tilt_position
+            self.async_write_ha_state()
+        except IntegrationHeytechApiClientError:
+            _LOGGER.exception("Failed to set tilt position for %s", self._name)
+
+    async def async_open_cover_tilt(self, **_kwargs: Any) -> None:
+        """Open the cover tilt."""
+        _LOGGER.info("Opening tilt of %s", self._name)
+        await self.async_set_cover_tilt_position(tilt_position=100)
+
+    async def async_close_cover_tilt(self, **_kwargs: Any) -> None:
+        """Close the cover tilt."""
+        _LOGGER.info("Closing tilt of %s", self._name)
+        await self.async_set_cover_tilt_position(tilt_position=0)
+
+    async def async_stop_cover_tilt(self, **_kwargs: Any) -> None:
+        """Stop the cover tilt."""
+        _LOGGER.info("Stopping tilt of %s", self._name)
+        try:
+            await self._api_client.add_command("stop", self._channels)
+        except IntegrationHeytechApiClientError:
+            _LOGGER.exception("Failed to stop tilt for %s", self._name)
+
     async def async_open_cover(self, **_kwargs: Any) -> None:
         """Open the cover."""
         _LOGGER.info("Opening %s on channels %s", self._name, self._channels)
-        if self._is_awning:
-            await self.async_set_cover_position(position=MIN_POSITION)
-        else:
-            await self.async_set_cover_position(position=MAX_POSITION)
+        # For Heytech: position 100 = open
+        await self.async_set_cover_position(position=MAX_POSITION)
         self._is_opening = True
         self.async_write_ha_state()
 
     async def async_close_cover(self, **_kwargs: Any) -> None:
         """Close the cover."""
         _LOGGER.info("Closing %s on channels %s", self._name, self._channels)
-        if self._is_awning:
-            await self.async_set_cover_position(position=MAX_POSITION)
-        else:
-            await self.async_set_cover_position(position=MIN_POSITION)
+        # For Heytech: position 0 = closed
+        await self.async_set_cover_position(position=MIN_POSITION)
         self._is_closing = True
         self.async_write_ha_state()
 
@@ -298,11 +360,17 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
 
     def _handle_coordinator_update(self) -> None:
         """Update the cover's state from the coordinator."""
-        self._prev_position = self._position
         positions = self.coordinator.data.get("shutter_positions", {})
-        if not self._channels:
-            self._position = None
-        else:
+        _LOGGER.debug(
+            "Cover '%s' update: all positions=%s, channels=%s",
+            self._name,
+            positions,
+            self._channels,
+        )
+
+        # Get new position from controller
+        new_position = None
+        if self._channels:
             # Collect positions for all associated channels
             channel_positions = [
                 positions.get(channel, None) for channel in self._channels
@@ -312,17 +380,36 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             if channel_positions:
                 # If multiple channels, decide how to represent the position
                 # Here, we take the average position
-                self._position = sum(channel_positions) // len(channel_positions)
-            else:
-                self._position = None
+                new_position = sum(channel_positions) // len(channel_positions)
+                _LOGGER.debug(
+                    "Cover '%s' channels %s: positions from controller %s, "
+                    "calculated new_position=%s, current position=%s, "
+                    "is_moving=%s",
+                    self._name,
+                    self._channels,
+                    channel_positions,
+                    new_position,
+                    self._position,
+                    (self._is_opening or self._is_closing),
+                )
 
-        if self._position is not None and self._prev_position is not None:
-            if self._position == self._prev_position:
+        # Always update position from controller
+        # The controller is the source of truth
+        if new_position is not None:
+            position_changed = self._position != new_position
+            self._prev_position = self._position
+            self._position = new_position
+
+            # If position hasn't changed, movement has stopped
+            if not position_changed and (self._is_opening or self._is_closing):
+                _LOGGER.debug(
+                    "Cover '%s' movement stopped at position %s",
+                    self._name,
+                    self._position,
+                )
                 self._is_opening = False
                 self._is_closing = False
-        else:
-            self._is_opening = False
-            self._is_closing = False
+
         self.async_write_ha_state()
 
 
@@ -332,3 +419,35 @@ class InvalidChannelFormatError(TypeError):
     def __init__(self, name: str, channels: Any) -> None:
         """Initialize the InvalidChannelFormatError."""
         super().__init__(f"Invalid channel format for '{name}': {channels}")
+
+
+class HeytechGroupCover(HeytechCover):
+    """Representation of a Heytech group cover."""
+
+    def __init__(
+        self,
+        name: str,
+        group_number: int,
+        channels: list[int],
+        api_client: HeytechApiClient,
+        unique_id: str,
+        coordinator: HeytechDataUpdateCoordinator,
+    ) -> None:
+        """Initialize the group cover."""
+        super().__init__(name, channels, api_client, unique_id, coordinator)
+        self._group_number = group_number
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        """Return device information about this group cover."""
+        return {
+            "identifiers": {(DOMAIN, f"heytech_group_{self._group_number}")},
+            "name": self._name,
+            "manufacturer": "Heytech",
+            "model": "Shutter Group",
+        }
+
+    @property
+    def icon(self) -> str:
+        """Return the icon to use in the frontend."""
+        return "mdi:window-shutter"

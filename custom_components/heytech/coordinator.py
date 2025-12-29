@@ -59,6 +59,9 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             positions = self.api_client.get_shutter_positions()
             climate_data = self.api_client.get_climate_data()
+            automation_status = self.api_client.get_automation_status()
+            logbook_count = self.api_client.get_logbook_count()
+
             if not positions:
                 _LOGGER.warning("No shutter positions received.")
             if not climate_data:
@@ -71,6 +74,10 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             if positions:
                 self.shutter_positions = positions
                 result["shutter_positions"] = positions
+            if automation_status is not None:
+                result["automation_status"] = automation_status
+            if logbook_count is not None:
+                result["logbook_count"] = logbook_count
         except Exception as exception:
             error_message = f"Error fetching shutter positions: {exception}"
             LOGGER.error(error_message)

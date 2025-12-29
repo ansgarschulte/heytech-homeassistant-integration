@@ -1,104 +1,219 @@
-# Heytech
-
-[![GitHub Release][releases-shield]][releases]
-[![GitHub Activity][commits-shield]][commits]
-[![License][license-shield]](LICENSE)
-
-![Project Maintenance][maintenance-shield]
-[![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
-
-[![Discord][discord-shield]][discord]
-[![Community Forum][forum-shield]][forum]
 # Heytech Home Assistant Integration
 
+[![GitHub Release][releases-shield]][releases]
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/ansgarschulte/heytech-homeassistant-integration/releases)
+[![License][license-shield]](LICENSE)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 
-This is a custom integration for [Home Assistant](https://www.home-assistant.io/) that allows you to control your Heytech shutters.
+**🎉 Version 1.5.0** - Complete feature set with scenes, groups, sensors, and advanced automation!
+
+Control your Heytech shutter system directly from Home Assistant.
+
+[releases-shield]: https://img.shields.io/github/release/ansgarschulte/heytech-homeassistant-integration.svg
+[releases]: https://github.com/ansgarschulte/heytech-homeassistant-integration/releases
+[license-shield]: https://img.shields.io/github/license/ansgarschulte/heytech-homeassistant-integration.svg
 
 ---
 
 ## Features
-- Control Heytech shutters directly from Home Assistant.
-- Add and manage shutters dynamically through the Home Assistant interface.
-- Seamless integration with Home Assistant's `Cover` platform.
+
+✅ **Shutters** - Full control of all configured shutters  
+✅ **Groups** - Control multiple shutters as groups (up to 8)  
+✅ **Scenes** - Activate predefined scenarios  
+✅ **Sensors** - Temperature, humidity, wind, rain, brightness  
+✅ **Services** - Logbook access, group control, time sync  
+✅ **Tilt Control** - Jalousie/blind angle control  
+✅ **Time Sync** - Button entity and service for time synchronization  
 
 ---
 
 ## Installation
 
-### Step 1: Add the Repository
-1. Ensure that [HACS](https://hacs.xyz/) is installed in your Home Assistant setup.
-2. Go to **HACS** → **Integrations**.
-3. Click the three dots in the top-right corner and select **Custom repositories**.
-4. Add this repository URL:
-5. Choose **Integration** as the category and click **Add**.
+### HACS (Recommended)
 
-### Step 2: Install the Integration
-1. After adding the custom repository, search for "Heytech Home Assistant Integration" in HACS.
-2. Click **Install** to add the integration to your setup.
+1. Add custom repository: `https://github.com/ansgarschulte/heytech-homeassistant-integration`
+2. Install "Heytech" from HACS
+3. Restart Home Assistant
+4. Add integration via UI
 
-### Step 3: Restart Home Assistant
-1. Restart Home Assistant to apply the changes.
-- Navigate to **Settings** → **System** → **Restart**.
+### Manual
+
+1. Copy `custom_components/heytech` to your `config/custom_components/`
+2. Restart Home Assistant
+3. Add integration via UI
 
 ---
 
 ## Configuration
 
-### Add the Integration
-1. After restarting, go to **Settings** → **Devices & Services** → **Add Integration**.
-2. Search for **Heytech** and select it.
-3. Enter the following details:
-- **Host/IP**: The IP address or hostname of your Heytech hub.
-- **Port**: The port number (default: `1002`).
-- **Pin (optional)**: Your Heytech device PIN, if applicable.
+**Settings** → **Devices & Services** → **Add Integration** → Search "Heytech"
 
-### Add and Manage Shutters
-- Once the integration is set up, you can add shutters via the integration settings:
-1. Navigate to **Settings** → **Devices & Services** → **Heytech Integration**.
-2. Select **Options** to add or manage shutters:
-- **Add Shutter**: Provide a name and channel numbers (comma-separated) for each shutter.
-- **Remove Shutter**: Remove shutters no longer in use.
+Required:
+- **Host**: IP address of controller (e.g. `192.168.1.100`)
+- **Port**: `1002` (default)
+- **PIN**: Your PIN code (if configured)
 
 ---
 
-## Example Configuration in Home Assistant
+## What You Get
 
-No manual YAML configuration is required, but the integration adds entities automatically, such as:
-- `cover.living_room_shutter`
-- `cover.bedroom_shutter`
+### 🎛️ Entities
 
-You can control these shutters via Home Assistant UI, automations, or scripts.
+**Covers**
+- All shutters as `cover.shutter_name`
+- All groups as `cover.group_1` through `cover.group_8`
+- Control: open, close, stop, set position, tilt (jalousies)
+
+**Sensors**
+- `sensor.indoor_temperature` / `sensor.outdoor_temperature`
+- `sensor.relative_humidity`
+- `sensor.current_wind_speed` / `sensor.maximum_wind_speed`
+- `sensor.brightness` (with Lux conversion)
+- `binary_sensor.rain`
+- `binary_sensor.alarm`
+- `binary_sensor.automation_status`
+- `sensor.logbook_entries`
+
+**Scenes** (if configured on controller)
+- `scene.morning`, `scene.evening`, etc.
+
+### 🛠️ Services
+
+**Read Logbook**
+```yaml
+service: heytech.read_logbook
+data:
+  max_entries: 100
+```
+
+**Clear Logbook**
+```yaml
+service: heytech.clear_logbook
+```
+
+**Control Group**
+```yaml
+service: heytech.control_group
+data:
+  group_number: 1
+  action: "open"  # or "close", "stop", 0-100
+```
+
+**Export Shutters Configuration**
+```yaml
+service: heytech.export_shutters_config
+data:
+  filename: "my_backup"
+```
+
+**Import Shutters Configuration**
+```yaml
+service: heytech.import_shutters_config
+data:
+  config_data: |
+    {
+      "version": "1.0",
+      "shutters": {
+        "Living Room": "1,2,3",
+        "Bedroom": "4,5"
+      }
+    }
+```
+
+**Synchronize Time**
+```yaml
+service: heytech.sync_time
+```
+
+Sends current Home Assistant date/time to the controller. Useful for:
+- Daily automation (e.g., at 3 AM)
+- After controller restarts
+- Initial setup
+
+**Example Automation:**
+```yaml
+automation:
+  - alias: "Daily Time Sync"
+    trigger:
+      - platform: time
+        at: "03:00:00"
+    action:
+      - service: heytech.sync_time
+```
+
+---
+
+## Backup & Restore
+
+### Via UI (Options)
+1. **Settings** → **Devices & Services** → **Heytech**
+2. Click **Configure** (3 dots menu)
+3. Choose **Export Configuration** to backup
+4. Choose **Import Configuration** to restore
+
+### Via Services
+- Use `heytech.export_shutters_config` service
+- Use `heytech.import_shutters_config` service
+- Configuration is JSON format for easy editing
+
+---
+
+## Testing
+
+### Quick API Test
+```bash
+python tests/test_api.py YOUR_IP --pin YOUR_PIN
+```
+
+### Docker Test Environment
+```bash
+docker-compose up -d
+# Access at http://localhost:8123
+```
+
+See `DEVELOPMENT.md` for detailed testing guide.
+
+---
+
+## Known Limitations
+
+⚠️ **Scenarios** must be configured on controller first  
+ℹ️ **Group names** are generic ("Group 1", "Group 2") as controller sends bitmasks
 
 ---
 
 ## Troubleshooting
-If you encounter any issues:
-1. Check the **Logs** in Home Assistant for error messages.
-2. Ensure your Heytech hub is reachable from the network.
-3. Open an issue on the [GitHub repository](https://github.com/ansgarschulte/heytech-homeassistant-integration/issues).
+
+**No shutters found?**
+- Check IP/port in integration settings
+- Verify PIN if controller is protected
+- Check logs: Settings → System → Logs
+
+**No groups visible?**
+- Groups must be configured on controller
+- Reload integration after configuration
+
+**No scenes?**
+- Configure scenarios in HeyTech software
+- Reload integration
 
 ---
 
-## Support and Feedback
-If you find any bugs or have feature requests, please open an issue in the [GitHub Issues section](https://github.com/ansgarschulte/heytech-homeassistant-integration/issues).
-## Contributions are welcome!
+## Documentation
 
-If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)
+- `DEVELOPMENT.md` - Development & testing guide
+- `CHANGELOG.md` - Version history & features
+- `CONTRIBUTING.md` - How to contribute
 
-***
+---
 
-[heytech]: https://github.com/ansgarschulte/heytech-homeassistant-integration
-[buymecoffee]: https://www.buymeacoffee.com/ansgarschulte
-[buymecoffeebadge]: https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg?style=for-the-badge
-[commits-shield]: https://img.shields.io/github/commit-activity/y/ansgarschulte/heytech-homeassistant-integration.svg?style=for-the-badge
-[commits]: https://github.com/ansgarschulte/heytech-homeassistant-integration/commits/main
-[discord]: https://discord.gg/Qa5fW2R
-[discord-shield]: https://img.shields.io/discord/330944238910963714.svg?style=for-the-badge
-[exampleimg]: example.png
-[forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
-[forum]: https://community.home-assistant.io/
-[license-shield]: https://img.shields.io/github/license/ansgarschulte/heytech-homeassistant-integration.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/badge/maintainer-Ansgar%20Schulte%20%40ansgarschulte-blue.svg?style=for-the-badge
-[releases-shield]: https://img.shields.io/github/release/ansgarschulte/heytech-homeassistant-integration.svg?style=for-the-badge
-[releases]: https://github.com/ansgarschulte/heytech-homeassistant-integration/releases
+## Support
+
+🐛 [Issues](https://github.com/ansgarschulte/heytech-homeassistant-integration/issues)  
+💬 [Discussions](https://github.com/ansgarschulte/heytech-homeassistant-integration/discussions)
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE)

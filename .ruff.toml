@@ -12,8 +12,25 @@ ignore = [
     "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
     "D203", # no-blank-line-before-class (incompatible with formatter)
     "D212", # multi-line-summary-first-line (incompatible with formatter)
+    "D213", # multi-line-docstring-summary-second-line
     "COM812", # incompatible with formatter
     "ISC001", # incompatible with formatter
+    "PLR2004", # magic value comparison
+    "PLR0911", # too many return statements
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments
+    "PLR0915", # too many statements
+    "C901", # function is too complex
+]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = [
+    "T201",  # print found - allowed in tests
+    "BLE001",  # blind exception - allowed in tests
+    "PLC0415",  # import outside top-level - allowed in tests
+    "ANN",  # type annotations - not required in tests
+    "D",  # pydocstyle - not required in tests
+    "PLR2004", # magic values - allowed in tests
 ]
 
 [lint.flake8-pytest-style]

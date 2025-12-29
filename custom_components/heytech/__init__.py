@@ -7,22 +7,68 @@ https://github.com/ansgarschulte/heytech-homeassistant-integration
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import voluptuous as vol
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 
 from .api import HeytechApiClient
-from .const import CONF_PIN, DOMAIN
+from .const import CONF_PIN, CONF_SHUTTERS, DOMAIN
 from .coordinator import HeytechDataUpdateCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import HomeAssistant, ServiceCall
 
-PLATFORMS: list[Platform] = [Platform.COVER, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.COVER,
+    Platform.SENSOR,
+    Platform.SCENE,
+    Platform.BUTTON,
+]
 _LOGGER = logging.getLogger(__name__)
+
+# Service schemas
+SERVICE_READ_LOGBOOK = "read_logbook"
+SERVICE_CLEAR_LOGBOOK = "clear_logbook"
+SERVICE_CONTROL_GROUP = "control_group"
+SERVICE_EXPORT_SHUTTERS = "export_shutters_config"
+SERVICE_IMPORT_SHUTTERS = "import_shutters_config"
+SERVICE_SYNC_TIME = "sync_time"
+
+SCHEMA_READ_LOGBOOK = vol.Schema(
+    {
+        vol.Optional("max_entries", default=50): cv.positive_int,
+    }
+)
+
+SCHEMA_CLEAR_LOGBOOK = vol.Schema({})
+
+SCHEMA_CONTROL_GROUP = vol.Schema(
+    {
+        vol.Required("group_number"): cv.positive_int,
+        vol.Required("action"): cv.string,
+    }
+)
+
+SCHEMA_EXPORT_SHUTTERS = vol.Schema(
+    {
+        vol.Optional("filename", default="heytech_shutters_backup"): cv.string,
+    }
+)
+
+SCHEMA_IMPORT_SHUTTERS = vol.Schema(
+    {
+        vol.Required("config_data"): cv.string,
+    }
+)
+
+SCHEMA_SYNC_TIME = vol.Schema({})
 
 
 async def async_setup_entry(
@@ -85,8 +131,254 @@ async def async_setup_entry(
     # Add an update listener to handle option changes
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
+    # Register services
+    await async_setup_services(hass, api_client)
+
     _LOGGER.info("Heytech integration setup successfully for entry %s", entry.entry_id)
     return True
+
+
+async def async_setup_services(
+    hass: HomeAssistant, api_client: HeytechApiClient
+) -> None:
+    """Set up services for Heytech integration."""
+
+    async def handle_read_logbook(call: ServiceCall) -> None:
+        """Handle the read_logbook service call."""
+        max_entries = call.data.get("max_entries", 50)
+        _LOGGER.info("Reading logbook with max %d entries", max_entries)
+        entries = await api_client.async_read_logbook(max_entries)
+        _LOGGER.info("Read %d logbook entries", len(entries))
+        # Optionally fire an event with the logbook data
+        hass.bus.async_fire(
+            "heytech_logbook_read",
+            {"entries": entries, "count": len(entries)},
+        )
+
+    async def handle_clear_logbook(_call: ServiceCall) -> None:
+        """Handle the clear_logbook service call."""
+        _LOGGER.info("Clearing logbook")
+        await api_client.async_clear_logbook()
+
+    async def handle_control_group(call: ServiceCall) -> None:
+        """Handle the control_group service call."""
+        group_number = call.data["group_number"]
+        action = call.data["action"]
+        _LOGGER.info("Controlling group %d with action %s", group_number, action)
+        await api_client.async_control_group(group_number, action)
+
+    async def handle_export_shutters(call: ServiceCall) -> None:
+        """Handle the export_shutters_config service call."""
+        filename = call.data.get("filename", "heytech_shutters_backup")
+        _LOGGER.info("Exporting shutters configuration to %s", filename)
+
+        # Get the config entry for this domain
+        entries = hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            _LOGGER.error("No Heytech config entries found")
+            return
+
+        entry = entries[0]  # Get first entry
+        shutters = entry.options.get(CONF_SHUTTERS, entry.data.get(CONF_SHUTTERS, {}))
+
+        # Create export data
+        export_data = {
+            "version": "1.0",
+            "exported_at": hass.helpers.template.now().isoformat(),
+            "shutters": shutters,
+        }
+
+        # Save to file in Home Assistant's config directory
+        filepath = Path(hass.config.path()) / f"{filename}.json"
+
+        try:
+            filepath.write_text(
+                json.dumps(export_data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            _LOGGER.info("Exported %d custom shutters to %s", len(shutters), filepath)
+
+            # Show persistent notification with export location
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": (
+                        f"Configuration exported successfully!\n\n"
+                        f"**Location:** `{filepath}`\n"
+                        f"**Shutters:** {len(shutters)}\n\n"
+                        f"You can download it via File Editor, SSH, or Samba."
+                    ),
+                    "title": "Heytech Configuration Exported",
+                    "notification_id": "heytech_export_success",
+                },
+            )
+
+            # Fire success event
+            hass.bus.async_fire(
+                "heytech_config_exported",
+                {
+                    "filename": f"{filename}.json",
+                    "filepath": filepath,
+                    "shutters_count": len(shutters),
+                },
+            )
+        except Exception:
+            _LOGGER.exception("Failed to export configuration")
+
+            # Show error notification
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": (
+                        "Failed to export configuration!\n\n"
+                        "Check the logs for more details."
+                    ),
+                    "title": "Heytech Export Failed",
+                    "notification_id": "heytech_export_failed",
+                },
+            )
+
+            hass.bus.async_fire(
+                "heytech_config_export_failed",
+                {"error": "Export failed"},
+            )
+
+    async def handle_import_shutters(call: ServiceCall) -> None:
+        """Handle the import_shutters_config service call."""
+        config_data = call.data["config_data"]
+        _LOGGER.info("Importing shutters configuration")
+
+        try:
+            # Parse JSON data
+            import_data = json.loads(config_data)
+
+            if "shutters" not in import_data:
+                _LOGGER.error("Invalid config data: missing 'shutters' key")
+                hass.bus.async_fire(
+                    "heytech_config_import_failed",
+                    {"error": "Invalid config data: missing 'shutters' key"},
+                )
+                return
+
+            shutters = import_data["shutters"]
+
+            # Get the config entry
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if not entries:
+                _LOGGER.error("No Heytech config entries found")
+                return
+
+            entry = entries[0]
+
+            # Update the config entry with imported shutters
+            new_options = {**entry.options, CONF_SHUTTERS: shutters}
+            hass.config_entries.async_update_entry(entry, options=new_options)
+
+            # Fire success event
+            hass.bus.async_fire(
+                "heytech_config_imported",
+                {"shutters_count": len(shutters)},
+            )
+            _LOGGER.info("Imported %d custom shutters successfully", len(shutters))
+
+        except json.JSONDecodeError:
+            _LOGGER.exception("Failed to parse JSON")
+            hass.bus.async_fire(
+                "heytech_config_import_failed",
+                {"error": "Invalid JSON"},
+            )
+
+    async def handle_sync_time(_call: ServiceCall) -> None:
+        """Handle the sync_time service call."""
+        _LOGGER.info("Synchronizing time with Heytech controller")
+        try:
+            await api_client.async_sync_time()
+            _LOGGER.info("Time synchronized successfully")
+
+            # Show success notification
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": (
+                        "Time synchronized successfully with Heytech controller."
+                    ),
+                    "title": "Heytech Time Sync",
+                    "notification_id": "heytech_time_sync_success",
+                },
+            )
+
+            hass.bus.async_fire("heytech_time_synced")
+        except Exception:
+            _LOGGER.exception("Failed to sync time")
+
+            # Show error notification
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": "Failed to sync time. Check the logs for details.",
+                    "title": "Heytech Time Sync Failed",
+                    "notification_id": "heytech_time_sync_failed",
+                },
+            )
+
+            hass.bus.async_fire(
+                "heytech_time_sync_failed",
+                {"error": "Time sync failed"},
+            )
+
+    # Register services only once
+    if not hass.services.has_service(DOMAIN, SERVICE_READ_LOGBOOK):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_READ_LOGBOOK,
+            handle_read_logbook,
+            schema=SCHEMA_READ_LOGBOOK,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_CLEAR_LOGBOOK):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_CLEAR_LOGBOOK,
+            handle_clear_logbook,
+            schema=SCHEMA_CLEAR_LOGBOOK,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_CONTROL_GROUP):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_CONTROL_GROUP,
+            handle_control_group,
+            schema=SCHEMA_CONTROL_GROUP,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_EXPORT_SHUTTERS):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_EXPORT_SHUTTERS,
+            handle_export_shutters,
+            schema=SCHEMA_EXPORT_SHUTTERS,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_IMPORT_SHUTTERS):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_IMPORT_SHUTTERS,
+            handle_import_shutters,
+            schema=SCHEMA_IMPORT_SHUTTERS,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_SYNC_TIME):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SYNC_TIME,
+            handle_sync_time,
+            schema=SCHEMA_SYNC_TIME,
+        )
 
 
 async def async_reload_entry(
@@ -115,6 +407,14 @@ async def async_unload_entry(
 
         # Remove the entry from hass.data
         hass.data[DOMAIN].pop(entry.entry_id)
+
+        # Unregister services if no other entries exist
+        if not hass.data[DOMAIN]:
+            hass.services.async_remove(DOMAIN, SERVICE_READ_LOGBOOK)
+            hass.services.async_remove(DOMAIN, SERVICE_CLEAR_LOGBOOK)
+            hass.services.async_remove(DOMAIN, SERVICE_CONTROL_GROUP)
+            hass.services.async_remove(DOMAIN, SERVICE_EXPORT_SHUTTERS)
+            hass.services.async_remove(DOMAIN, SERVICE_IMPORT_SHUTTERS)
 
         _LOGGER.info(
             "Heytech integration entry %s unloaded successfully", entry.entry_id

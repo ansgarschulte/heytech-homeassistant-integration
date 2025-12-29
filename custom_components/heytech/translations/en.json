@@ -26,6 +26,8 @@
         "menu_options": {
           "add_shutter": "Add Shutter Group",
           "remove_shutter": "Remove Shutter Group",
+          "export_config": "Export Configuration",
+          "import_config": "Import Configuration",
           "finish": "Finish"
         }
       },
@@ -51,6 +53,20 @@
         "data": {
           "shutter": "Finish"
         }
+      },
+      "export_config": {
+        "title": "Export Shutters Configuration",
+        "description": "Copy the JSON configuration below. You can also use Developer Tools > Services > 'heytech.export_shutters_config' to save it to a file.\n\nTotal shutters: {count}",
+        "data": {
+          "export_data": "Configuration JSON (read-only, copy this)"
+        }
+      },
+      "import_config": {
+        "title": "Import Shutters Configuration",
+        "description": "Paste the exported configuration JSON below:",
+        "data": {
+          "config_data": "Configuration JSON"
+        }
       }
     },
     "error": {
@@ -58,7 +74,9 @@
       "unknown": "Unknown error occurred.",
       "no_shutters_to_remove": "There are no shutters to remove.",
       "invalid_channels": "Invalid channels input. Please enter numbers separated by commas.",
-      "shutter_not_found": "Selected shutter not found."
+      "shutter_not_found": "Selected shutter not found.",
+      "invalid_json": "Invalid JSON format. Please check your input.",
+      "invalid_format": "Invalid configuration format. Expected 'shutters' key with dictionary value."
     },
     "abort": {
       "no_shutters_to_remove": "There are no shutters to remove.",

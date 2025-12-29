@@ -77,6 +77,23 @@ async def async_setup_entry(
         else:
             entity = HeytechTemperatureSensor(coordinator, name, unique_id)
         entities.append(entity)
+
+    # Add automation status sensor
+    automation_unique_id = f"{entry.entry_id}_automation_status"
+    current_unique_ids.add(automation_unique_id)
+    entities.append(
+        HeytechAutomationStatusSensor(
+            coordinator, "automation_status", automation_unique_id
+        )
+    )
+
+    # Add logbook count sensor
+    logbook_unique_id = f"{entry.entry_id}_logbook_count"
+    current_unique_ids.add(logbook_unique_id)
+    entities.append(
+        HeytechLogbookCountSensor(coordinator, "logbook_count", logbook_unique_id)
+    )
+
     async_add_entities(entities)
 
     # Remove entities and devices that are no longer in the configuration
@@ -287,6 +304,73 @@ class HeytechBinarySensor(CoordinatorEntity, BinarySensorEntity):
         value = self.coordinator.data.get("climate_data", {}).get(self._name)
         _LOGGER.debug("Binary sensor %s has value %s", self._name, value)
         return (value in ("1", 1)) if value is not None else False
+
+
+class HeytechAutomationStatusSensor(CoordinatorEntity, BinarySensorEntity):
+    """Binary sensor for external automation switch status."""
+
+    def __init__(
+        self, coordinator: DataUpdateCoordinator, name: str, unique_id: str
+    ) -> None:
+        """Initialize the sensor with the coordinator and the specific name key."""
+        super().__init__(coordinator)
+        self._name = name
+        self._attr_unique_id = unique_id
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return "Automation Status"
+
+    @property
+    def is_on(self) -> bool:
+        """
+        Return the automation status.
+
+        True if external automation is enabled, False otherwise.
+        """
+        value = self.coordinator.data.get("automation_status")
+        _LOGGER.debug("Automation status sensor has value %s", value)
+        return value is True
+
+    @property
+    def icon(self) -> str:
+        """Return the icon to use in the frontend."""
+        return "mdi:home-automation" if self.is_on else "mdi:home-off"
+
+
+class HeytechLogbookCountSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for logbook entry count."""
+
+    def __init__(
+        self, coordinator: DataUpdateCoordinator, name: str, unique_id: str
+    ) -> None:
+        """Initialize the sensor with the coordinator and the specific name key."""
+        super().__init__(coordinator)
+        self._name = name
+        self._attr_unique_id = unique_id
+
+    @property
+    def name(self) -> str:
+        """Return the name of the sensor."""
+        return "Logbook Entries"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the logbook entry count."""
+        value = self.coordinator.data.get("logbook_count")
+        _LOGGER.debug("Logbook count sensor has value %s", value)
+        return int(value) if value is not None else 0
+
+    @property
+    def icon(self) -> str:
+        """Return the icon to use in the frontend."""
+        return "mdi:book-open-variant"
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        """Return the unit of measurement."""
+        return "entries"
 
 
 async def _async_cleanup_entities_and_devices(
