@@ -415,22 +415,34 @@ class HeytechApiClient:
         """Return the available scenarios."""
         return self.scenarios
 
-    async def async_activate_scenario(self, scenario_number: int) -> None:
+    async def async_activate_scenario(
+        self, scenario_number: int, scenario_name: str = ""
+    ) -> None:
         """
-        Activate a scenario by number.
+        Activate a scenario by number or name.
 
+        Use rsa (receive scenario activation) command followed by rhe.
+        Based on HEYcontrol.exe strings analysis: rsa -> rhe sequence.
         :param scenario_number: The scenario number to activate (1-based)
+        :param scenario_name: The scenario name (optional)
         """
-        _LOGGER.info("Activating scenario %d", scenario_number)
+        _LOGGER.info("Activating scenario %d (%s)", scenario_number, scenario_name)
+
         commands = []
         if self._pin:
             commands.extend(["rsc\r\n", f"{self._pin}\r\n"])
+
+        # Based on .exe analysis: send rsa, then scenario number, then rhe
         commands.extend(
             [
                 "rsa\r\n",
                 f"{scenario_number}\r\n",
+                "rhe\r\n",
             ]
         )
+
+        _LOGGER.debug("Scenario activation commands: %s", commands)
+
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())

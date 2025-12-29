@@ -98,6 +98,8 @@ class HeytechScene(Scene):
             self._scenario_number,
         )
         try:
-            await self._api_client.async_activate_scenario(self._scenario_number)
+            await self._api_client.async_activate_scenario(
+                self._scenario_number, self._name
+            )
         except IntegrationHeytechApiClientError:
             _LOGGER.exception("Failed to activate scenario '%s'", self._name)
