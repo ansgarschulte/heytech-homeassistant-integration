@@ -531,22 +531,66 @@ class HeytechApiClient:
             self.connection_task = asyncio.create_task(self._process_commands())
 
     async def async_sync_time(self) -> None:
-        """Synchronize date and time with the controller."""
+        r"""
+        Synchronize date and time with the controller.
+
+        Protocol (from HEYcontrol.exe):
+        1. Send 'rdt' + CR
+        2. Send Year (4-digit) + CR
+        3. Send Month + CR
+        4. Send Day + CR
+        5. Send Hour + CR
+        6. Send Minute + CR
+        7. Send Second + CR
+        8. Send Checksum (sum of all values) + CR
+
+        Example for 2025-01-15 14:30:45:
+        rdt\r\n
+        2025\r\n
+        1\r\n
+        15\r\n
+        14\r\n
+        30\r\n
+        45\r\n
+        2130\r\n  (2025+1+15+14+30+45=2130)
+        """
         # Get current time in local timezone (controller expects local time)
         now = datetime.now().astimezone()
 
-        # Format: rdt followed by: day,month,year,hour,minute,second,weekday
-        # Weekday: 1=Monday, 7=Sunday
-        weekday = now.isoweekday()  # 1=Monday, 7=Sunday
+        # Extract time components
+        year = now.year
+        month = now.month
+        day = now.day
+        hour = now.hour
+        minute = now.minute
+        second = now.second
 
-        time_data = (
-            f"{now.day},{now.month},{now.year % 100},"
-            f"{now.hour},{now.minute},{now.second},{weekday}"
+        # Calculate checksum (sum of all time components)
+        checksum = year + month + day + hour + minute + second
+
+        _LOGGER.info(
+            "Syncing time: %04d-%02d-%02d %02d:%02d:%02d (checksum: %d)",
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            checksum,
         )
 
-        _LOGGER.info("Syncing time: %s", time_data)
+        # Build command sequence according to HEYcontrol.exe protocol
+        commands = [
+            "rdt\r\n",
+            f"{year}\r\n",
+            f"{month}\r\n",
+            f"{day}\r\n",
+            f"{hour}\r\n",
+            f"{minute}\r\n",
+            f"{second}\r\n",
+            f"{checksum}\r\n",
+        ]
 
-        commands = [f"rdt{time_data}\r\n"]
         if self._pin:
             commands = ["rsc\r\n", f"{self._pin}\r\n", *commands]
 

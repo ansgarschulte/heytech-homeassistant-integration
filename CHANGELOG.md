@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Fixed
+- **Time Synchronization** - Fixed protocol to match HEYcontrol.exe specification (#9)
+  - Now sends each time component on separate line with CR/LF
+  - Added checksum calculation (sum of year+month+day+hour+minute+second)
+  - Protocol: `rdt`, year, month, day, hour, minute, second, checksum (8 lines)
+  - Previously sent all values in one comma-separated line (incorrect)
+  - Time sync button and service now work correctly
+
 ### 🚀 Added
 - **System Information Sensors** - Display hardware and software details as sensors (#10)
   - Model sensor (`sensor.model`) - Shows device model (e.g., "HEYtech RS879M")
