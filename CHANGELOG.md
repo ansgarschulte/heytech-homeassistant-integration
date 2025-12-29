@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### 🐛 Fixed
+- **Logbook Reading** - Fixed service not reading any entries
+  - **Root cause 1**: Count parser didn't handle comma in `sla` response
+    - Controller: `start_sla169,ende_sla` (with comma!)
+    - Fixed regex: `start_sla(\d+),?ende_sla`
+  - **Root cause 2**: Entry parser expected wrong format completely
+    - Expected: `start_sld1;Name;Date;Time;Action;Source,ende_sld` (semicolon)
+    - Actual: `start_sld45,9,0,29,12,26,11,15,0,147,ende_sld` (comma)
+    - Format: entry,channel,action,day,month,year,hour,minute,second,checksum
+    - Completely rewrote parser to handle actual format
+  - Added active polling (3s timeout) for count retrieval
+  - Added verbose logging showing exact controller responses
+  - Dynamic wait time based on number of entries
+
 - **Time Synchronization** - Fixed protocol to match HEYcontrol.exe specification (#9)
   - Now sends each time component on separate line with CR/LF
   - Added checksum calculation (sum of year+month+day+hour+minute+second)

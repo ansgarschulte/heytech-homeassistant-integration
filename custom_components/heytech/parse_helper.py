@@ -379,7 +379,12 @@ def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
     """
     Parse logbook entry from the 'sld' command.
 
-    Example response: 'start_sld1;Living Room;2024-12-27;09:15:30;up;Manual,ende_sld'
+    Actual format (comma-separated):
+    start_sld<entry_nr>,<channel>,<action>,<day>,<month>,<year>,<hour>,<minute>,<second>,<checksum>,ende_sld
+
+    Example: 'start_sld45,9,0,29,12,26,11,15,0,147,ende_sld'
+    - Entry 45, Channel 9, Action 0, Date: 29.12.2026, Time: 11:15:00
+
     Returns dict with logbook entry details.
     """
     if START_SLD in line and END_SLD in line:
@@ -388,17 +393,40 @@ def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
         end_index = line.rfind(END_SLD)
         data_str = line[start_index:end_index]
 
-        # Logbook format: Nr;Motor/Raum;Datum;Uhrzeit;Richtung;Ausgelöst
-        parts = data_str.split(";")
-        if len(parts) >= 6:
+        # Format: entry_nr,channel,action,day,month,year,hour,minute,second,checksum
+        parts = data_str.split(",")
+        if len(parts) >= 9:
             try:
+                entry_number = int(parts[0])
+                channel = int(parts[1])
+                action = int(parts[2])
+                day = int(parts[3])
+                month = int(parts[4])
+                year = int(parts[5]) + 2000  # Convert 26 -> 2026
+                hour = int(parts[6])
+                minute = int(parts[7])
+                second = int(parts[8])
+
+                # Format date and time
+                date_str = f"{year:04d}-{month:02d}-{day:02d}"
+                time_str = f"{hour:02d}:{minute:02d}:{second:02d}"
+
+                # Map action codes (0=close/down, 1=open/up, others TBD)
+                action_map = {
+                    0: "close",
+                    1: "open",
+                    2: "stop",
+                }
+                action_str = action_map.get(action, f"action_{action}")
+
                 return {
-                    "entry_number": int(parts[0]),
-                    "motor_room": parts[1].strip(),
-                    "date": parts[2].strip(),
-                    "time": parts[3].strip(),
-                    "direction": parts[4].strip(),
-                    "trigger": parts[5].strip() if len(parts) > 5 else "",
+                    "number": entry_number,
+                    "channel": channel,
+                    "action": action_str,
+                    "date": date_str,
+                    "time": time_str,
+                    "name": f"Channel {channel}",  # Will be enriched later
+                    "source": "Unknown",  # Not in this format
                 }
             except (ValueError, IndexError):
                 _LOGGER.warning("Failed to parse logbook entry: %s", line)
@@ -409,11 +437,14 @@ def parse_sla_logbook_count(line: str) -> int:
     """
     Parse number of logbook entries from the 'sla' command.
 
-    Example response: 'start_sla150ende_sla'
+    Example responses:
+    - 'start_sla169,ende_sla' (with comma - actual format)
+    - 'start_sla150ende_sla' (without comma - documented format)
     Returns number of entries.
     """
     if START_SLA in line and END_SLA in line:
-        match = re.match(r"start_sla(\d+)ende_sla", line)
+        # Match with optional comma after the number
+        match = re.match(r"start_sla(\d+),?ende_sla", line)
         if match:
             return int(match.group(1))
     return 0

@@ -508,16 +508,53 @@ class HeytechApiClient:
         """
         self.logbook_entries = []
 
+        # First, get the current logbook count
+        _LOGGER.debug("Requesting logbook count (sla)")
+        old_count = self.logbook_count
+        await self.add_command("sla", [])
+
+        # Wait for count to be updated (poll with timeout)
+        max_wait = 30  # 3 seconds timeout
+        while self.logbook_count == old_count and max_wait > 0:
+            await asyncio.sleep(0.1)
+            max_wait -= 1
+
+        if max_wait == 0:
+            _LOGGER.warning(
+                "Timeout waiting for logbook count response, using cached value: %d",
+                self.logbook_count,
+            )
+
+        _LOGGER.debug("Logbook count received: %d", self.logbook_count)
+
+        if self.logbook_count == 0:
+            _LOGGER.info("Logbook is empty (count=0)")
+            return self.logbook_entries
+
+        # Calculate how many entries to read
+        entries_to_read = min(max_entries, self.logbook_count)
+        _LOGGER.info(
+            "Reading %d logbook entries (total available: %d)",
+            entries_to_read,
+            self.logbook_count,
+        )
+
         # Request logbook entries
-        for i in range(1, min(max_entries, self.logbook_count) + 1):
+        for i in range(1, entries_to_read + 1):
             commands = ["sld\r\n", f"{i}\r\n"]
             await self.command_queue.put(commands)
 
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
 
-        # Wait for entries to be collected
-        await asyncio.sleep(2)
+        # Wait for entries to be collected (more time for larger logbooks)
+        wait_time = min(5, max(2, entries_to_read * 0.1))
+        _LOGGER.debug("Waiting %.1f seconds for logbook entries", wait_time)
+        await asyncio.sleep(wait_time)
+
+        _LOGGER.info(
+            "Logbook read complete: %d entries retrieved", len(self.logbook_entries)
+        )
         return self.logbook_entries
 
     async def async_clear_logbook(self) -> None:
@@ -787,7 +824,14 @@ class HeytechApiClient:
                         self.logbook_entries.append(entry)
                 elif START_SLA in line and END_SLA in line:
                     # Parse logbook count
+                    old_count = self.logbook_count
                     self.logbook_count = parse_sla_logbook_count(line)
+                    _LOGGER.info(
+                        "Logbook count updated: %d -> %d (from: %s)",
+                        old_count,
+                        self.logbook_count,
+                        line,
+                    )
                 elif START_SJP in line and END_SJP in line:
                     # Parse jalousie parameters
                     params = parse_sjp_jalousie_params(line)
