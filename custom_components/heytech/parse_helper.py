@@ -418,7 +418,9 @@ def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
                     2: "stop",
                 }
                 action_str = action_map.get(action, f"action_{action}")
-
+            except (ValueError, IndexError):
+                _LOGGER.warning("Failed to parse logbook entry: %s", line)
+            else:
                 return {
                     "number": entry_number,
                     "channel": channel,
@@ -428,8 +430,6 @@ def parse_sld_logbook_entry(line: str) -> dict[str, Any] | None:
                     "name": f"Channel {channel}",  # Will be enriched later
                     "source": "Unknown",  # Not in this format
                 }
-            except (ValueError, IndexError):
-                _LOGGER.warning("Failed to parse logbook entry: %s", line)
     return None
 
 
