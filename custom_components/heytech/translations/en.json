@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Configure Heytech Integration",
-        "description": "Set up your Heytech connection. If you need help with the configuration, have a look here: https://github.com/ansgarschulte/heytech-homeassistant-integration",
+        "description": "Set up your Heytech connection. If you need help with the configuration, have a look at the documentation.",
         "data": {
           "host": "Host/IP",
           "port": "Port",
