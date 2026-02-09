@@ -65,7 +65,7 @@ def parse_sop_shutter_positions(line: str) -> dict[int, int]:
         positions_str = line[start_index:end_index]
     elif END_SOP in line:
         # No 'start_sop', assume positions start at beginning
-        positions_str = line.split(END_SOP)[0].strip(",")
+        positions_str = line.split(END_SOP, maxsplit=1)[0].strip(",")
     else:
         _LOGGER.error("Unexpected 'sop' response: %s", line)
         return {}
