@@ -407,7 +407,7 @@ class HeytechSystemInfoSensor(CoordinatorEntity, SensorEntity):
         system_info = self.coordinator.data.get("system_info", {})
         value = system_info.get(self._info_type)
         _LOGGER.debug("System info sensor %s has value %s", self._info_type, value)
-        return value if value else "Unknown"
+        return value if value is not None else "Unknown"
 
     @property
     def icon(self) -> str:
