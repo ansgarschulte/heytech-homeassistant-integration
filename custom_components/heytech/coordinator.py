@@ -44,15 +44,20 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
         This method will be called automatically during
         coordinator.async_config_entry_first_refresh.
         """
-        await self.api_client.async_read_heytech_data()
-        positions = await self.api_client.async_wait_for_shutter_positions()
-        if not positions:
-            _LOGGER.warning("No shutter positions received.")
-            await self._handle_no_data()
-        climate_data = await self.api_client.async_get_climate_data()
-        if not climate_data:
-            _LOGGER.warning("No climate data received.")
-            await self._handle_no_data()
+        try:
+            await self.api_client.async_read_heytech_data()
+            positions = await self.api_client.async_wait_for_shutter_positions()
+            if not positions:
+                _LOGGER.warning("No shutter positions received during setup.")
+            climate_data = await self.api_client.async_get_climate_data()
+            if not climate_data:
+                _LOGGER.warning("No climate data received during setup.")
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Initial data fetch failed (device may still be booting). "
+                "The integration will retry automatically.",
+                exc_info=True,
+            )
 
     async def _async_update_data(self) -> dict[str, dict[any, any]]:
         """Fetch data from the Heytech API."""
@@ -64,12 +69,6 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             logbook_count = self.api_client.get_logbook_count()
             system_info = self.api_client.get_system_info()
 
-            if not positions:
-                _LOGGER.warning("No shutter positions received.")
-            if not climate_data:
-                _LOGGER.warning("No climate data received.")
-            if not positions and not climate_data:
-                await self._handle_no_data()
             if climate_data:
                 self.climate_data = climate_data
                 result["climate_data"] = climate_data
@@ -83,14 +82,17 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             if system_info:
                 self.system_info = system_info
                 result["system_info"] = system_info
+
+            # Use cached values if current data is empty (device may be reconnecting)
+            if not result.get("shutter_positions") and self.shutter_positions:
+                result["shutter_positions"] = self.shutter_positions
+            if not result.get("climate_data") and self.climate_data:
+                result["climate_data"] = self.climate_data
+
         except Exception as exception:
-            error_message = f"Error fetching shutter positions: {exception}"
+            error_message = f"Error fetching heytech data: {exception}"
             LOGGER.error(error_message)
             raise UpdateFailed(error_message) from exception
         else:
             return result
 
-    async def _handle_no_data(self) -> None:
-        """Handle the case when no shutter positions are received."""
-        error_message = "Failed to retrieve shutter positions and climate data."
-        raise UpdateFailed(error_message)
