@@ -211,29 +211,31 @@ class HeytechApiClient:
 
     async def disconnect(self) -> None:
         """Disconnect from the Heytech device."""
-        if self.connected:
-            _LOGGER.debug("Disconnecting from Heytech device")
-            if self.read_task:
-                self.read_task.cancel()
-                self.read_task = None
-            if self.idle_task:
-                self.idle_task.cancel()
-                self.idle_task = None
-            if self.connection_task:
-                self.connection_task.cancel()
-                self.connection_task = None
-            if self.writer:
-                self.writer.close()
-                try:
-                    await asyncio.shield(self.writer.wait_closed())
-                except asyncio.CancelledError:
-                    _LOGGER.debug("CancelledError caught during wait_closed()")
-                except Exception:
-                    _LOGGER.exception("Error while closing the connection")
-                self.writer = None
-            self.reader = None
-            self.connected = False
-            _LOGGER.debug("Disconnected from Heytech device")
+        if not self.connected:
+            return
+        # Set connected=False immediately to prevent re-entrant calls
+        self.connected = False
+        _LOGGER.debug("Disconnecting from Heytech device")
+        if self.read_task:
+            self.read_task.cancel()
+            self.read_task = None
+        if self.idle_task:
+            self.idle_task.cancel()
+            self.idle_task = None
+        if self.connection_task:
+            self.connection_task.cancel()
+            self.connection_task = None
+        if self.writer:
+            self.writer.close()
+            try:
+                await asyncio.shield(self.writer.wait_closed())
+            except asyncio.CancelledError:
+                _LOGGER.debug("CancelledError caught during wait_closed()")
+            except Exception:
+                _LOGGER.exception("Error while closing the connection")
+            self.writer = None
+        self.reader = None
+        _LOGGER.debug("Disconnected from Heytech device")
 
     async def async_reconnect(self) -> None:
         """Force a clean reconnect to the controller.
@@ -276,6 +278,8 @@ class HeytechApiClient:
                 await asyncio.sleep(RECONNECT_RETRY_INTERVAL)
             else:
                 _LOGGER.info("Reconnect successful after %d attempt(s)", attempt)
+                # Refresh shutter positions after reconnect
+                await self.add_command("sop", [])
                 return
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:

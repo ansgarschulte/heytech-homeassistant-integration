@@ -310,8 +310,8 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
         self.async_write_ha_state()
 
     async def _force_position_refresh_later(self) -> None:
-        for _i in range(20):
-            await asyncio.sleep(1)
+        for _i in range(5):
+            await asyncio.sleep(4)
             await self._api_client.async_read_shutters_positions()
             await self.coordinator.async_refresh()
         self._is_opening = False
