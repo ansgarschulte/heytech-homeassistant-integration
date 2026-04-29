@@ -71,6 +71,8 @@ COMMAND_DELAY = 0.05
 MAX_RETRIES = 3  # Maximum number of retries for sending commands
 RETRY_DELAY = 1  # Delay between retries in seconds
 CONNECTION_TIMEOUT = 15  # Timeout in seconds for establishing a TCP connection
+RECONNECT_MAX_DURATION = 300  # seconds to keep retrying after power outage (5 min)
+RECONNECT_RETRY_INTERVAL = 10  # seconds between reconnect attempts
 FULLY_OPEN = 100
 FULLY_CLOSED = 0
 
@@ -167,7 +169,7 @@ class HeytechApiClient:
                 # Initialize controller (required after boot/restart)
                 # Send RHI (Hand-Steuerung Initialisierung) + RHE sequence
                 await self._send_initialization_sequence()
-            except OSError:
+            except (OSError, TimeoutError):
                 retries += 1
                 _LOGGER.exception("Connection error. Retry %d/%d", retries, MAX_RETRIES)
                 await asyncio.sleep(RETRY_DELAY)
@@ -236,16 +238,45 @@ class HeytechApiClient:
     async def async_reconnect(self) -> None:
         """Force a clean reconnect to the controller.
 
-        Useful after a power outage when the serial-to-IP adapter needs a fresh
-        TCP connection to resume normal operation.
+        After a power outage the serial-to-IP adapter needs time to boot and
+        start its TCP server. This method retries for up to RECONNECT_MAX_DURATION
+        seconds so the integration recovers automatically once the adapter is ready.
         """
         _LOGGER.info(
             "Forcing reconnect to Heytech device at %s:%s", self.host, self.port
         )
         await self.disconnect()
         await asyncio.sleep(2.0)
-        await self.connect()
-        _LOGGER.info("Reconnect to Heytech device successful")
+
+        start = asyncio.get_event_loop().time()
+        attempt = 0
+        while True:
+            attempt += 1
+            elapsed = asyncio.get_event_loop().time() - start
+            try:
+                _LOGGER.info(
+                    "Reconnect attempt %d (elapsed %.0fs / %ds)",
+                    attempt, elapsed, RECONNECT_MAX_DURATION,
+                )
+                await self.connect()
+            except IntegrationHeytechApiClientCommunicationError:
+                elapsed = asyncio.get_event_loop().time() - start
+                if elapsed >= RECONNECT_MAX_DURATION:
+                    _LOGGER.exception(
+                        "Reconnect failed after %d attempts (%.0fs). Giving up.",
+                        attempt, elapsed,
+                    )
+                    raise
+                _LOGGER.warning(
+                    "Reconnect attempt %d failed, retrying in %ds... (%.0fs elapsed)",
+                    attempt, RECONNECT_RETRY_INTERVAL, elapsed,
+                )
+                # Make sure connected flag is reset before next attempt
+                self.connected = False
+                await asyncio.sleep(RECONNECT_RETRY_INTERVAL)
+            else:
+                _LOGGER.info("Reconnect successful after %d attempt(s)", attempt)
+                return
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
