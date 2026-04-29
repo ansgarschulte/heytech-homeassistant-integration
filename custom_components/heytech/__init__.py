@@ -40,6 +40,7 @@ SERVICE_CONTROL_GROUP = "control_group"
 SERVICE_EXPORT_SHUTTERS = "export_shutters_config"
 SERVICE_IMPORT_SHUTTERS = "import_shutters_config"
 SERVICE_SYNC_TIME = "sync_time"
+SERVICE_RECONNECT = "reconnect"
 
 SCHEMA_READ_LOGBOOK = vol.Schema(
     {
@@ -69,6 +70,8 @@ SCHEMA_IMPORT_SHUTTERS = vol.Schema(
 )
 
 SCHEMA_SYNC_TIME = vol.Schema({})
+
+SCHEMA_RECONNECT = vol.Schema({})
 
 
 async def async_setup_entry(
@@ -331,6 +334,49 @@ async def async_setup_services(
                 {"error": "Time sync failed"},
             )
 
+    async def handle_reconnect(_call: ServiceCall) -> None:
+        """Handle the reconnect service call.
+
+        Forces a clean disconnect and reconnect to the Heytech controller.
+        Use this after a power outage when the controller becomes unreachable.
+        """
+        _LOGGER.info("Forcing reconnect to Heytech controller")
+        try:
+            await api_client.async_reconnect()
+            _LOGGER.info("Reconnect successful")
+
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": "Reconnected successfully to Heytech controller.",
+                    "title": "Heytech Reconnect",
+                    "notification_id": "heytech_reconnect_success",
+                },
+            )
+
+            hass.bus.async_fire("heytech_reconnected")
+        except Exception:
+            _LOGGER.exception("Failed to reconnect")
+
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": (
+                        "Failed to reconnect to Heytech controller. "
+                        "Check the logs for details."
+                    ),
+                    "title": "Heytech Reconnect Failed",
+                    "notification_id": "heytech_reconnect_failed",
+                },
+            )
+
+            hass.bus.async_fire(
+                "heytech_reconnect_failed",
+                {"error": "Reconnect failed"},
+            )
+
     # Register services only once
     if not hass.services.has_service(DOMAIN, SERVICE_READ_LOGBOOK):
         hass.services.async_register(
@@ -380,6 +426,14 @@ async def async_setup_services(
             schema=SCHEMA_SYNC_TIME,
         )
 
+    if not hass.services.has_service(DOMAIN, SERVICE_RECONNECT):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_RECONNECT,
+            handle_reconnect,
+            schema=SCHEMA_RECONNECT,
+        )
+
 
 async def async_reload_entry(
     hass: HomeAssistant,
@@ -415,6 +469,8 @@ async def async_unload_entry(
             hass.services.async_remove(DOMAIN, SERVICE_CONTROL_GROUP)
             hass.services.async_remove(DOMAIN, SERVICE_EXPORT_SHUTTERS)
             hass.services.async_remove(DOMAIN, SERVICE_IMPORT_SHUTTERS)
+            hass.services.async_remove(DOMAIN, SERVICE_SYNC_TIME)
+            hass.services.async_remove(DOMAIN, SERVICE_RECONNECT)
 
         _LOGGER.info(
             "Heytech integration entry %s unloaded successfully", entry.entry_id

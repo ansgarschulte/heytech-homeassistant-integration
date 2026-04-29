@@ -33,7 +33,10 @@ async def async_setup_entry(
     ]
 
     # Create button entity for time synchronization
-    async_add_entities([HeytechSyncTimeButton(coordinator, api_client, entry.entry_id)])
+    async_add_entities([
+        HeytechSyncTimeButton(coordinator, api_client, entry.entry_id),
+        HeytechReconnectButton(coordinator, api_client, entry.entry_id),
+    ])
 
 
 class HeytechSyncTimeButton(CoordinatorEntity, ButtonEntity):
@@ -60,3 +63,29 @@ class HeytechSyncTimeButton(CoordinatorEntity, ButtonEntity):
             _LOGGER.info("Time synchronized successfully")
         except Exception:
             _LOGGER.exception("Failed to sync time")
+
+
+class HeytechReconnectButton(CoordinatorEntity, ButtonEntity):
+    """Button entity for forcing a reconnect to the Heytech controller."""
+
+    def __init__(
+        self,
+        coordinator: HeytechDataUpdateCoordinator,
+        api_client: HeytechApiClient,
+        entry_id: str,
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self._api_client = api_client
+        self._attr_name = "Reconnect"
+        self._attr_unique_id = f"{entry_id}_reconnect_button"
+        self._attr_icon = "mdi:connection"
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        _LOGGER.info("Reconnect button pressed")
+        try:
+            await self._api_client.async_reconnect()
+            _LOGGER.info("Reconnect successful")
+        except Exception:
+            _LOGGER.exception("Failed to reconnect")

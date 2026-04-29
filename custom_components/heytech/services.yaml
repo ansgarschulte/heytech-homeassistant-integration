@@ -68,3 +68,10 @@ import_shutters_config:
 sync_time:
   name: Synchronize Time
   description: Synchronize date and time with the Heytech controller
+
+reconnect:
+  name: Reconnect
+  description: >
+    Force a clean reconnect to the Heytech controller.
+    Use this after a power outage when the controller becomes unreachable via TCP.
+    The integration will disconnect, wait briefly, and re-establish the connection.

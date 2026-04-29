@@ -70,6 +70,7 @@ _LOGGER = logging.getLogger(__name__)
 COMMAND_DELAY = 0.05
 MAX_RETRIES = 3  # Maximum number of retries for sending commands
 RETRY_DELAY = 1  # Delay between retries in seconds
+CONNECTION_TIMEOUT = 15  # Timeout in seconds for establishing a TCP connection
 FULLY_OPEN = 100
 FULLY_CLOSED = 0
 
@@ -151,8 +152,9 @@ class HeytechApiClient:
         while not self.connected and retries < MAX_RETRIES:
             try:
                 _LOGGER.debug("Attempting to connect to %s:%s", self.host, self.port)
-                self.reader, self.writer = await asyncio.open_connection(
-                    self.host, self.port
+                self.reader, self.writer = await asyncio.wait_for(
+                    asyncio.open_connection(self.host, self.port),
+                    timeout=CONNECTION_TIMEOUT,
                 )
                 self.connected = True
                 self.last_activity = asyncio.get_event_loop().time()
@@ -230,6 +232,20 @@ class HeytechApiClient:
             self.reader = None
             self.connected = False
             _LOGGER.debug("Disconnected from Heytech device")
+
+    async def async_reconnect(self) -> None:
+        """Force a clean reconnect to the controller.
+
+        Useful after a power outage when the serial-to-IP adapter needs a fresh
+        TCP connection to resume normal operation.
+        """
+        _LOGGER.info(
+            "Forcing reconnect to Heytech device at %s:%s", self.host, self.port
+        )
+        await self.disconnect()
+        await asyncio.sleep(2.0)
+        await self.connect()
+        _LOGGER.info("Reconnect to Heytech device successful")
 
     def _generate_shutter_command(self, action: str, channels: list[int]) -> list[str]:
         """Generate shutter commands based on action and channels."""
