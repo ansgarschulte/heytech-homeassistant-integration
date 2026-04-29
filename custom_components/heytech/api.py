@@ -446,7 +446,7 @@ class HeytechApiClient:
             await self.async_read_shutters_positions()
             await self.async_get_climate_data()
         except Exception as exc:
-            _LOGGER.exception("Failed to get data from Heytech API")
+            _LOGGER.warning("Failed to get data from Heytech API: %s", exc)
             raise IntegrationHeytechApiClientCommunicationError from exc
         else:
             return self.shutters

@@ -45,8 +45,11 @@ async def async_setup_entry(
             await api_client.async_read_heytech_data()
             await asyncio.sleep(1)  # Wait for responses
             scenarios = api_client.get_scenarios()
-        except Exception:
-            _LOGGER.exception("Failed to discover scenarios")
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to discover scenarios (device may still be booting)",
+                exc_info=True,
+            )
 
     if not scenarios:
         _LOGGER.warning("Still no scenarios found after retry")
