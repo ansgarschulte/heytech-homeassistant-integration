@@ -8,7 +8,8 @@
           "host": "Host/IP",
           "port": "Port",
           "pin": "Pin (optional)",
-          "max_auto_shutters": "Maximum Auto-Discovered Shutters"
+          "max_auto_shutters": "Maximum Auto-Discovered Shutters",
+          "adapter_password": "XT-PICO Adapter Password (optional, enables auto-recovery)"
         }
       },
       "shutter": {

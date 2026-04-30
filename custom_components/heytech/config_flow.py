@@ -19,7 +19,7 @@ from .api import (
     IntegrationHeytechApiClientCommunicationError,
     IntegrationHeytechApiClientError,
 )
-from .const import CONF_MAX_AUTO_SHUTTERS, CONF_PIN, CONF_SHUTTERS, DOMAIN, LOGGER
+from .const import CONF_ADAPTER_PASSWORD, CONF_MAX_AUTO_SHUTTERS, CONF_PIN, CONF_SHUTTERS, DOMAIN, LOGGER
 
 if TYPE_CHECKING:
     from homeassistant import data_entry_flow
@@ -37,6 +37,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
         self._pin: str | None = None
         self._max_auto_shutters: int | None = None
         self._add_custom_shutters: bool = False
+        self._adapter_password: str = ""
         self._shutters: dict[str, str] = {}
         self._shutter_name: str | None = None
         self._shutter_channels: str | None = None
@@ -58,6 +59,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
             self._pin = user_input.get(CONF_PIN, "")
             self._max_auto_shutters = user_input.get(CONF_MAX_AUTO_SHUTTERS, 10)
             self._add_custom_shutters = user_input.get("add_custom_shutters", False)
+            self._adapter_password = user_input.get(CONF_ADAPTER_PASSWORD, "")
 
             # Validate connection
             try:
@@ -82,6 +84,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                         CONF_PORT: self._port,
                         CONF_PIN: self._pin,
                         CONF_MAX_AUTO_SHUTTERS: self._max_auto_shutters,
+                        CONF_ADAPTER_PASSWORD: self._adapter_password,
                         CONF_SHUTTERS: {},  # No custom shutters
                     },
                 )
@@ -127,6 +130,14 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                         ),
                     ),
                     vol.Optional(
+                        CONF_ADAPTER_PASSWORD,
+                        default=(user_input or {}).get(CONF_ADAPTER_PASSWORD, ""),
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD,
+                        ),
+                    ),
+                    vol.Optional(
                         "add_custom_shutters", default=False
                     ): selector.BooleanSelector(),
                 },
@@ -166,6 +177,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                     CONF_PORT: int(self._port),
                     CONF_PIN: self._pin,
                     CONF_MAX_AUTO_SHUTTERS: self._max_auto_shutters,
+                    CONF_ADAPTER_PASSWORD: self._adapter_password,
                     CONF_SHUTTERS: self._shutters,
                 },
             )

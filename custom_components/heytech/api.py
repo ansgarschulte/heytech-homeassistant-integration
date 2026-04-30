@@ -103,7 +103,12 @@ class HeytechApiClient:
     """Client for interacting with Heytech devices."""
 
     def __init__(
-        self, host: str, port: int = 1002, pin: str = "", idle_timeout: int = 10
+        self,
+        host: str,
+        port: int = 1002,
+        pin: str = "",
+        idle_timeout: int = 10,
+        adapter_password: str = "",
     ) -> None:
         """
         Initialize the API client.
@@ -112,8 +117,14 @@ class HeytechApiClient:
         :param port: Port to connect to.
         :param pin: PIN for authentication (optional).
         :param idle_timeout: Idle timeout in seconds.
+        :param adapter_password: XT-PICO adapter Telnet password for automatic
+            binary-mode recovery (optional). When set, the integration will
+            automatically restart the adapter interface via Telnet (port 23)
+            when binary boot mode is detected, which pulses DTR and causes the
+            controller to reboot into normal ASCII mode.
         """
         self._pin = pin
+        self._adapter_password = adapter_password
         self.host = host
         self.port = int(port)
         self.idle_timeout = idle_timeout
@@ -779,10 +790,86 @@ class HeytechApiClient:
 
         self.connection_task = None
 
+    async def _attempt_adapter_restart_recovery(self) -> None:
+        """Restart the XT-PICO adapter interface to recover from binary boot mode.
+
+        Connects to the adapter's Telnet management port (23), logs in with the
+        configured adapter password, and sends the restart command. This briefly
+        resets the serial port and re-asserts DTR=HIGH, which causes the Heytech
+        controller to reboot into normal ASCII mode.
+        """
+        _LOGGER.warning(
+            "Binary mode recovery: restarting XT-PICO adapter at %s via Telnet...",
+            self.host,
+        )
+        adapter_reader = None
+        adapter_writer = None
+        try:
+            adapter_reader, adapter_writer = await asyncio.wait_for(
+                asyncio.open_connection(self.host, 23),
+                timeout=10,
+            )
+
+            # Drain initial Telnet negotiation / password prompt
+            await asyncio.sleep(0.5)
+            # Discard any pending bytes (Telnet option negotiation + "Password" prompt)
+            try:
+                await asyncio.wait_for(adapter_reader.read(1024), timeout=2)
+            except TimeoutError:
+                pass
+
+            # Send the management password
+            adapter_writer.write(f"{self._adapter_password}\r\n".encode())
+            await adapter_writer.drain()
+
+            # Wait for the main menu to appear
+            await asyncio.sleep(1.0)
+            try:
+                await asyncio.wait_for(adapter_reader.read(2048), timeout=2)
+            except TimeoutError:
+                pass
+
+            # Send restart command from main menu
+            adapter_writer.write(b"R\r\n")
+            await adapter_writer.drain()
+            await asyncio.sleep(0.5)
+
+            _LOGGER.warning(
+                "Binary mode recovery: adapter restart command sent. "
+                "Disconnecting and waiting %ds for controller reboot...",
+                8,
+            )
+        except Exception:
+            _LOGGER.exception(
+                "Binary mode recovery: failed to connect to adapter management port"
+            )
+        finally:
+            if adapter_writer:
+                try:
+                    adapter_writer.close()
+                    await adapter_writer.wait_closed()
+                except Exception:
+                    pass
+
+        # Disconnect from the controller (binary mode stream) and wait for reboot
+        await self.disconnect()
+        await asyncio.sleep(8)
+
+        _LOGGER.warning(
+            "Binary mode recovery: attempting reconnect to %s:%s after adapter restart",
+            self.host,
+            self.port,
+        )
+        try:
+            await self.connect()
+        except Exception:
+            _LOGGER.exception("Binary mode recovery: reconnect failed")
+
     async def _read_output(self) -> None:
         """Read output from the Heytech device."""
         _BINARY_MODE_BYTES = frozenset([0x00, 0x80, 0xF8])
         _binary_mode_warned = False
+        _recovery_triggered = False
 
         while self.connected and self.reader:
             try:
@@ -809,6 +896,19 @@ class HeytechApiClient:
                             line_bytes[:10].hex(),
                         )
                         _binary_mode_warned = True
+                        # Trigger automatic recovery if adapter password is configured
+                        if self._adapter_password and not _recovery_triggered:
+                            _recovery_triggered = True
+                            _LOGGER.warning(
+                                "Binary mode recovery: adapter password is configured, "
+                                "triggering automatic XT-PICO restart in 3s..."
+                            )
+                            asyncio.get_event_loop().call_later(
+                                3,
+                                lambda: asyncio.ensure_future(
+                                    self._attempt_adapter_restart_recovery()
+                                ),
+                            )
                     continue
 
                 _binary_mode_warned = False  # reset on valid ASCII data

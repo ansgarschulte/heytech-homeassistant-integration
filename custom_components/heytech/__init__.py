@@ -18,7 +18,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
 from .api import HeytechApiClient
-from .const import CONF_PIN, CONF_SHUTTERS, DOMAIN
+from .const import CONF_ADAPTER_PASSWORD, CONF_PIN, CONF_SHUTTERS, DOMAIN
 from .coordinator import HeytechDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -88,6 +88,7 @@ async def async_setup_entry(
     host = data[CONF_HOST]
     port = data[CONF_PORT]
     pin = data.get(CONF_PIN, "")
+    adapter_password = data.get(CONF_ADAPTER_PASSWORD, "")
 
     # Retrieve existing API client instance if available
     api_client = hass.data[DOMAIN][entry.entry_id].get("api_client")
@@ -97,7 +98,9 @@ async def async_setup_entry(
         # Implement logic to update the API client if needed
     else:
         _LOGGER.debug("Creating Heytech API client.")
-        api_client = HeytechApiClient(host=host, port=port, pin=pin)
+        api_client = HeytechApiClient(
+            host=host, port=port, pin=pin, adapter_password=adapter_password
+        )
         hass.data[DOMAIN][entry.entry_id]["api_client"] = api_client
 
     # Initialize the DataUpdateCoordinator for periodic updates
