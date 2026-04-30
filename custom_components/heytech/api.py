@@ -108,7 +108,7 @@ class HeytechApiClient:
         port: int = 1002,
         pin: str = "",
         idle_timeout: int = 10,
-        adapter_password: str = "",
+        adapter_password: str = "xtpico",
     ) -> None:
         """
         Initialize the API client.
@@ -870,19 +870,28 @@ class HeytechApiClient:
         _BINARY_MODE_BYTES = frozenset([0x00, 0x80, 0xF8])
         _binary_mode_warned = False
         _recovery_triggered = False
+        # Manual line buffer — necessary because binary-mode bytes (0x00/0x80/0xF8)
+        # never contain 0x0A (newline), which would cause readline() to block forever.
+        _buf = bytearray()
 
         while self.connected and self.reader:
             try:
-                line_bytes = await self.reader.readline()
-                if line_bytes == b"":  # EOF
+                # read() instead of readline() so binary data doesn't stall the loop
+                try:
+                    chunk = await asyncio.wait_for(self.reader.read(4096), timeout=30)
+                except TimeoutError:
+                    continue
+
+                if not chunk:  # EOF
                     _LOGGER.debug("EOF received from device")
                     await self.disconnect()
                     break
 
                 # Detect post-power-outage binary boot mode.
                 # The controller sends UART bit-encoded bytes (only 0x00/0x80/0xF8)
-                # instead of ASCII when stuck in boot mode.
-                if line_bytes and set(line_bytes).issubset(_BINARY_MODE_BYTES):
+                # when stuck in binary boot mode. These bytes never contain '\n',
+                # so readline() would block indefinitely — hence the read() approach.
+                if set(chunk).issubset(_BINARY_MODE_BYTES):
                     if not _binary_mode_warned:
                         _LOGGER.error(
                             "Heytech controller is in binary boot mode "
@@ -893,10 +902,9 @@ class HeytechApiClient:
                             "If using an XT-PICO adapter, ensure DTR Protocol=1 "
                             "in the adapter config (Telnet port 23, password 'xtpico') "
                             "so the controller wakes normally on future power cycles.",
-                            line_bytes[:10].hex(),
+                            chunk[:10].hex(),
                         )
                         _binary_mode_warned = True
-                        # Trigger automatic recovery if adapter password is configured
                         if self._adapter_password and not _recovery_triggered:
                             _recovery_triggered = True
                             _LOGGER.warning(
@@ -912,138 +920,145 @@ class HeytechApiClient:
                     continue
 
                 _binary_mode_warned = False  # reset on valid ASCII data
-                line = line_bytes.decode("latin-1", errors="replace").strip()
-                _LOGGER.debug("Received line: %s", line)
-                if START_SOP in line and END_SOP in line:
-                    self.shutter_positions = parse_sop_shutter_positions(line)
-                elif START_SMN in line and END_SMN in line:
-                    one_shutter = parse_smn_motor_names_output(line)
 
-                    # Check if this is a scenario or a regular shutter
-                    for name, data in one_shutter.items():
-                        channel = data["channel"]
-                        if channel >= SCENARIO_CHANNEL_START:
-                            # This is a scenario, not a shutter
-                            scenario_num = channel - 64  # Scenarios start at 1
-                            self.scenarios[scenario_num] = name.strip()
+                # Accumulate bytes and process complete lines
+                _buf.extend(chunk)
+                while b"\n" in _buf:
+                    raw_line, _buf = _buf.split(b"\n", 1)
+                    line = raw_line.decode("latin-1", errors="replace").strip()
+                    if not line:
+                        continue
+                    _LOGGER.debug("Received line: %s", line)
+                    if START_SOP in line and END_SOP in line:
+                        self.shutter_positions = parse_sop_shutter_positions(line)
+                    elif START_SMN in line and END_SMN in line:
+                        one_shutter = parse_smn_motor_names_output(line)
+    
+                        # Check if this is a scenario or a regular shutter
+                        for name, data in one_shutter.items():
+                            channel = data["channel"]
+                            if channel >= SCENARIO_CHANNEL_START:
+                                # This is a scenario, not a shutter
+                                scenario_num = channel - 64  # Scenarios start at 1
+                                self.scenarios[scenario_num] = name.strip()
+                                _LOGGER.info(
+                                    "Scenario discovered: %d. %s",
+                                    scenario_num,
+                                    name.strip(),
+                                )
+                            else:
+                                # Regular shutter - merge with existing data
+                                self.shutters[name] = {
+                                    "channel": channel,
+                                    "name": name,
+                                }
+    
+                        # Signal discovery complete when all channels processed
+                        if (
+                            self._discovery_complete
+                            and self.max_channels
+                            and len(self.shutters) >= self.max_channels
+                        ):
+                            self._discovery_complete.set()
+                    elif START_SMC in line and END_SMC in line:
+                        self.max_channels = parse_smc_max_channel_output(line)
+                    elif START_SKD in line and END_SKD in line:
+                        self.climate_data = parse_skd_climate_data(line)
+                    elif START_RZN in line and END_RZN in line:
+                        # Parse scenario names from RZN (receive command)
+                        one_scenario = parse_szn_scenario_names_output(line)
+                        self.scenarios = {**self.scenarios, **one_scenario}
+                        _LOGGER.info("Scenario discovered: %s", one_scenario)
+                    elif START_SZN in line and END_SZN in line:
+                        # Fallback: also check SZN (though RZN is correct)
+                        one_scenario = parse_szn_scenario_names_output(line)
+                        self.scenarios = {**self.scenarios, **one_scenario}
+                        _LOGGER.info("Scenario discovered via SZN: %s", one_scenario)
+                    elif START_SAU in line and END_SAU in line:
+                        self.automation_status = parse_sau_automation_status(line)
+                    elif START_RGZ in line and END_RGZ in line:
+                        # Parse group channel assignments from RGZ (receive command)
+                        group_channels = parse_rgz_group_assignments(line)
+                        for group_num, channels in group_channels.items():
+                            if group_num not in self.groups:
+                                # Generate a default name
+                                self.groups[group_num] = {
+                                    "name": f"Group {group_num}",
+                                    "channels": channels,
+                                }
+                            else:
+                                self.groups[group_num]["channels"] = channels
                             _LOGGER.info(
-                                "Scenario discovered: %d. %s",
-                                scenario_num,
-                                name.strip(),
+                                "Group %d discovered with channels %s",
+                                group_num,
+                                channels,
                             )
-                        else:
-                            # Regular shutter - merge with existing data
-                            self.shutters[name] = {
-                                "channel": channel,
-                                "name": name,
-                            }
-
-                    # Signal discovery complete when all channels processed
-                    if (
-                        self._discovery_complete
-                        and self.max_channels
-                        and len(self.shutters) >= self.max_channels
-                    ):
-                        self._discovery_complete.set()
-                elif START_SMC in line and END_SMC in line:
-                    self.max_channels = parse_smc_max_channel_output(line)
-                elif START_SKD in line and END_SKD in line:
-                    self.climate_data = parse_skd_climate_data(line)
-                elif START_RZN in line and END_RZN in line:
-                    # Parse scenario names from RZN (receive command)
-                    one_scenario = parse_szn_scenario_names_output(line)
-                    self.scenarios = {**self.scenarios, **one_scenario}
-                    _LOGGER.info("Scenario discovered: %s", one_scenario)
-                elif START_SZN in line and END_SZN in line:
-                    # Fallback: also check SZN (though RZN is correct)
-                    one_scenario = parse_szn_scenario_names_output(line)
-                    self.scenarios = {**self.scenarios, **one_scenario}
-                    _LOGGER.info("Scenario discovered via SZN: %s", one_scenario)
-                elif START_SAU in line and END_SAU in line:
-                    self.automation_status = parse_sau_automation_status(line)
-                elif START_RGZ in line and END_RGZ in line:
-                    # Parse group channel assignments from RGZ (receive command)
-                    group_channels = parse_rgz_group_assignments(line)
-                    for group_num, channels in group_channels.items():
-                        if group_num not in self.groups:
-                            # Generate a default name
-                            self.groups[group_num] = {
-                                "name": f"Group {group_num}",
-                                "channels": channels,
-                            }
-                        else:
-                            self.groups[group_num]["channels"] = channels
+                    elif "start_sgz" in line and "ende_sgz" in line:
+                        # Parse group info from SGZ
+                        # (contains bitmasks for channel assignments)
+                        group_data = parse_sgz_group_control_output(line)
+                        for group_num, info in group_data.items():
+                            self.groups[group_num] = info
+                            _LOGGER.info(
+                                "Group %d discovered: '%s' with channels %s",
+                                group_num,
+                                info.get("name"),
+                                info.get("channels"),
+                            )
+                    elif START_SLD in line and END_SLD in line:
+                        # Parse logbook entry
+                        entry = parse_sld_logbook_entry(line)
+                        if entry:
+                            self.logbook_entries.append(entry)
+                    elif START_SLA in line and END_SLA in line:
+                        # Parse logbook count
+                        old_count = self.logbook_count
+                        self.logbook_count = parse_sla_logbook_count(line)
                         _LOGGER.info(
-                            "Group %d discovered with channels %s",
-                            group_num,
-                            channels,
+                            "Logbook count updated: %d -> %d (from: %s)",
+                            old_count,
+                            self.logbook_count,
+                            line,
                         )
-                elif "start_sgz" in line and "ende_sgz" in line:
-                    # Parse group info from SGZ
-                    # (contains bitmasks for channel assignments)
-                    group_data = parse_sgz_group_control_output(line)
-                    for group_num, info in group_data.items():
-                        self.groups[group_num] = info
-                        _LOGGER.info(
-                            "Group %d discovered: '%s' with channels %s",
-                            group_num,
-                            info.get("name"),
-                            info.get("channels"),
-                        )
-                elif START_SLD in line and END_SLD in line:
-                    # Parse logbook entry
-                    entry = parse_sld_logbook_entry(line)
-                    if entry:
-                        self.logbook_entries.append(entry)
-                elif START_SLA in line and END_SLA in line:
-                    # Parse logbook count
-                    old_count = self.logbook_count
-                    self.logbook_count = parse_sla_logbook_count(line)
-                    _LOGGER.info(
-                        "Logbook count updated: %d -> %d (from: %s)",
-                        old_count,
-                        self.logbook_count,
-                        line,
-                    )
-                elif START_SJP in line and END_SJP in line:
-                    # Parse jalousie parameters
-                    params = parse_sjp_jalousie_params(line)
-                    if params:
-                        channel = params.pop("channel")
-                        self.jalousie_params[channel] = params
-                elif START_SBP in line and END_SBP in line:
-                    # Parse shading parameters
-                    params = parse_sbp_shading_params(line)
-                    if params:
-                        channel = params.pop("channel")
-                        self.shading_params[channel] = params
-                elif START_SWP in line and END_SWP in line:
-                    # Parse wind parameters
-                    params = parse_swp_wind_params(line)
-                    if params:
-                        channel = params.pop("channel")
-                        self.wind_params[channel] = params
-                elif START_SRP in line and END_SRP in line:
-                    # Parse rain parameters
-                    params = parse_srp_rain_params(line)
-                    if params:
-                        channel = params.pop("channel")
-                        self.rain_params[channel] = params
-                elif START_SMO in line and END_SMO in line:
-                    # Parse model info
-                    model = parse_smo_model_output(line)
-                    self.system_info["model"] = model
-                    _LOGGER.debug("Model info: %s", model)
-                elif START_SFI in line and END_SFI in line:
-                    # Parse firmware version
-                    firmware = parse_sfi_firmware_output(line)
-                    self.system_info["firmware"] = firmware
-                    _LOGGER.debug("Firmware version: %s", firmware)
-                elif START_SGN in line and END_SGN in line:
-                    # Parse device number
-                    device_number = parse_sgn_device_number_output(line)
-                    self.system_info["device_number"] = device_number
-                    _LOGGER.debug("Device number: %s", device_number)
+                    elif START_SJP in line and END_SJP in line:
+                        # Parse jalousie parameters
+                        params = parse_sjp_jalousie_params(line)
+                        if params:
+                            channel = params.pop("channel")
+                            self.jalousie_params[channel] = params
+                    elif START_SBP in line and END_SBP in line:
+                        # Parse shading parameters
+                        params = parse_sbp_shading_params(line)
+                        if params:
+                            channel = params.pop("channel")
+                            self.shading_params[channel] = params
+                    elif START_SWP in line and END_SWP in line:
+                        # Parse wind parameters
+                        params = parse_swp_wind_params(line)
+                        if params:
+                            channel = params.pop("channel")
+                            self.wind_params[channel] = params
+                    elif START_SRP in line and END_SRP in line:
+                        # Parse rain parameters
+                        params = parse_srp_rain_params(line)
+                        if params:
+                            channel = params.pop("channel")
+                            self.rain_params[channel] = params
+                    elif START_SMO in line and END_SMO in line:
+                        # Parse model info
+                        model = parse_smo_model_output(line)
+                        self.system_info["model"] = model
+                        _LOGGER.debug("Model info: %s", model)
+                    elif START_SFI in line and END_SFI in line:
+                        # Parse firmware version
+                        firmware = parse_sfi_firmware_output(line)
+                        self.system_info["firmware"] = firmware
+                        _LOGGER.debug("Firmware version: %s", firmware)
+                    elif START_SGN in line and END_SGN in line:
+                        # Parse device number
+                        device_number = parse_sgn_device_number_output(line)
+                        self.system_info["device_number"] = device_number
+                        _LOGGER.debug("Device number: %s", device_number)
             except asyncio.CancelledError as e:
                 _LOGGER.debug("Read task cancelled: %s", e)
                 await self.disconnect()

@@ -131,7 +131,7 @@ class HeytechFlowHandler(ConfigFlow, domain=DOMAIN):
                     ),
                     vol.Optional(
                         CONF_ADAPTER_PASSWORD,
-                        default=(user_input or {}).get(CONF_ADAPTER_PASSWORD, ""),
+                        default=(user_input or {}).get(CONF_ADAPTER_PASSWORD, "xtpico"),
                     ): selector.TextSelector(
                         selector.TextSelectorConfig(
                             type=selector.TextSelectorType.PASSWORD,
