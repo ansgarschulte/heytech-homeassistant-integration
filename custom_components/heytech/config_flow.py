@@ -245,6 +245,8 @@ class HeytechOptionsFlowHandler(OptionsFlow):
                 return await self.async_step_export_config()
             if menu_option == "import_config":
                 return await self.async_step_import_config()
+            if menu_option == "connection_settings":
+                return await self.async_step_connection_settings()
             if menu_option == "finish":
                 # Check if shutters have changed
                 original_shutters = self._config_entry.options.get(
@@ -262,6 +264,7 @@ class HeytechOptionsFlowHandler(OptionsFlow):
             ("remove_shutter", "Remove Shutter"),
             ("export_config", "Export Configuration"),
             ("import_config", "Import Configuration"),
+            ("connection_settings", "Connection Settings"),
             ("finish", "Finish"),
         ]
         data_schema = vol.Schema(
@@ -279,6 +282,43 @@ class HeytechOptionsFlowHandler(OptionsFlow):
         return self.async_show_form(
             step_id="shutter_menu",
             data_schema=data_schema,
+        )
+
+    async def async_step_connection_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> data_entry_flow.FlowResult:
+        """Step to configure connection settings (adapter password etc.)."""
+        if user_input is not None:
+            adapter_password = user_input.get(CONF_ADAPTER_PASSWORD, "")
+            # Save immediately to config entry data so it takes effect without reload
+            self.hass.config_entries.async_update_entry(
+                self._config_entry,
+                data={
+                    **self._config_entry.data,
+                    CONF_ADAPTER_PASSWORD: adapter_password,
+                },
+            )
+            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+            return await self.async_step_shutter_menu()
+
+        current_password = self._config_entry.data.get(
+            CONF_ADAPTER_PASSWORD,
+            self._config_entry.options.get(CONF_ADAPTER_PASSWORD, ""),
+        )
+        return self.async_show_form(
+            step_id="connection_settings",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_ADAPTER_PASSWORD,
+                        default=current_password,
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD,
+                        ),
+                    ),
+                }
+            ),
         )
 
     async def async_step_add_shutter(

@@ -29,6 +29,7 @@
           "remove_shutter": "Remove Shutter Group",
           "export_config": "Export Configuration",
           "import_config": "Import Configuration",
+          "connection_settings": "Connection Settings",
           "finish": "Finish"
         }
       },
@@ -67,6 +68,13 @@
         "description": "Paste the exported configuration JSON below:",
         "data": {
           "config_data": "Configuration JSON"
+        }
+      },
+      "connection_settings": {
+        "title": "Connection Settings",
+        "description": "Configure the XT-PICO serial-to-IP adapter settings. The adapter password enables automatic recovery from binary boot mode after a power outage.",
+        "data": {
+          "adapter_password": "XT-PICO Adapter Password (Telnet port 23, leave empty to disable auto-recovery)"
         }
       }
     },
