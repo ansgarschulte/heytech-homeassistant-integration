@@ -193,11 +193,10 @@ class HeytechApiClient:
 
         try:
             _LOGGER.info("Sending controller initialization sequence (RHI/RHE)")
+            # Commands use leading space + CR only (from HEYcontrol.exe protocol analysis)
             init_commands = [
-                "rhi\r\n",  # Hand-Steuerung Initialisierung
-                "\r\n",
-                "rhe\r\n",  # Hand-Steuerung exit
-                "\r\n",
+                " rhi\r",  # Hand-Steuerung Initialisierung
+                " rhe\r",  # Hand-Steuerung exit
             ]
 
             for cmd in init_commands:
@@ -308,25 +307,22 @@ class HeytechApiClient:
         if self._pin:
             commands.extend(
                 [
-                    "rsc\r\n",
-                    f"{self._pin}\r\n",
+                    " rsc\r",
+                    f"{self._pin}\r",
                 ]
             )
 
         if not channels:
-            commands.append(f"{shutter_command}\r\n")
+            commands.append(f"{shutter_command}\r")
         else:
             for channel in channels:
                 commands.extend(
                     [
-                        "rhi\r\n",
-                        "\r\n",
-                        "rhb\r\n",
-                        f"{channel}\r\n",
-                        f"{shutter_command}\r\n",
-                        "\r\n",
-                        "rhe\r\n",
-                        "\r\n",
+                        " rhi\r",
+                        " rhb\r",
+                        f"{channel}\r",
+                        f"{shutter_command}\r",
+                        " rhe\r",
                     ]
                 )
 
@@ -494,14 +490,15 @@ class HeytechApiClient:
 
         commands = []
         if self._pin:
-            commands.extend(["rsc\r\n", f"{self._pin}\r\n"])
+            commands.extend([" rsc\r", f"{self._pin}\r"])
 
         # Based on .exe analysis: send rsa, then scenario number, then rhe
+        # r* commands use leading space + CR only
         commands.extend(
             [
-                "rsa\r\n",
-                f"{scenario_number}\r\n",
-                "rhe\r\n",
+                " rsa\r",
+                f"{scenario_number}\r",
+                " rhe\r",
             ]
         )
 
@@ -668,19 +665,20 @@ class HeytechApiClient:
         )
 
         # Build command sequence according to HEYcontrol.exe protocol
+        # r* commands use leading space + CR only (from exe analysis)
         commands = [
-            "rdt\r\n",
-            f"{year}\r\n",
-            f"{month}\r\n",
-            f"{day}\r\n",
-            f"{hour}\r\n",
-            f"{minute}\r\n",
-            f"{second}\r\n",
-            f"{checksum}\r\n",
+            " rdt\r",
+            f"{year}\r",
+            f"{month}\r",
+            f"{day}\r",
+            f"{hour}\r",
+            f"{minute}\r",
+            f"{second}\r",
+            f"{checksum}\r",
         ]
 
         if self._pin:
-            commands = ["rsc\r\n", f"{self._pin}\r\n", *commands]
+            commands = [" rsc\r", f"{self._pin}\r", *commands]
 
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
@@ -783,6 +781,9 @@ class HeytechApiClient:
 
     async def _read_output(self) -> None:
         """Read output from the Heytech device."""
+        _BINARY_MODE_BYTES = frozenset([0x00, 0x80, 0xF8])
+        _binary_mode_warned = False
+
         while self.connected and self.reader:
             try:
                 line_bytes = await self.reader.readline()
@@ -790,6 +791,27 @@ class HeytechApiClient:
                     _LOGGER.debug("EOF received from device")
                     await self.disconnect()
                     break
+
+                # Detect post-power-outage binary boot mode.
+                # The controller sends UART bit-encoded bytes (only 0x00/0x80/0xF8)
+                # instead of ASCII when stuck in boot mode.
+                if line_bytes and set(line_bytes).issubset(_BINARY_MODE_BYTES):
+                    if not _binary_mode_warned:
+                        _LOGGER.error(
+                            "Heytech controller is in binary boot mode "
+                            "(received non-ASCII bytes: %s). "
+                            "The controller is stuck after a power outage. "
+                            "To fix: power-cycle ONLY the Heytech controller "
+                            "(not the serial-to-IP adapter). "
+                            "If using an XT-PICO adapter, ensure DTR Protocol=1 "
+                            "in the adapter config (Telnet port 23, password 'xtpico') "
+                            "so the controller wakes normally on future power cycles.",
+                            line_bytes[:10].hex(),
+                        )
+                        _binary_mode_warned = True
+                    continue
+
+                _binary_mode_warned = False  # reset on valid ASCII data
                 line = line_bytes.decode("latin-1", errors="replace").strip()
                 _LOGGER.debug("Received line: %s", line)
                 if START_SOP in line and END_SOP in line:
