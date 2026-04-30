@@ -159,6 +159,9 @@ class HeytechApiClient:
         # Prevents recovery from firing concurrently or in a rapid loop.
         self._recovery_in_progress: bool = False
         self._last_recovery_time: float = 0.0
+        # Stop retrying after this many failed recovery attempts per session.
+        self._recovery_attempts: int = 0
+        self._max_recovery_attempts: int = 3
 
         self.periodic_task = asyncio.create_task(self._periodic_commands())
 
@@ -185,7 +188,15 @@ class HeytechApiClient:
                 await self._send_initialization_sequence()
             except (OSError, TimeoutError):
                 retries += 1
-                _LOGGER.exception("Connection error. Retry %d/%d", retries, MAX_RETRIES)
+                if retries < MAX_RETRIES:
+                    _LOGGER.warning(
+                        "Connection error (retry %d/%d): %s — retrying...",
+                        retries,
+                        MAX_RETRIES,
+                        type(Exception).__name__,
+                    )
+                else:
+                    _LOGGER.exception("Connection error. Retry %d/%d", retries, MAX_RETRIES)
                 await asyncio.sleep(RETRY_DELAY)
         if not self.connected:
             _LOGGER.error(
@@ -810,11 +821,24 @@ class HeytechApiClient:
                 "Binary mode recovery: skipping (already in progress or cooldown active)"
             )
             return
+        if self._recovery_attempts >= self._max_recovery_attempts:
+            _LOGGER.error(
+                "Binary mode recovery: giving up after %d failed attempts. "
+                "The Heytech controller is stuck in binary boot mode and cannot be "
+                "recovered automatically. Please power-cycle both the controller and "
+                "the XT-PICO adapter (disconnect power for 30s, then reconnect). "
+                "The integration will keep running with cached data.",
+                self._max_recovery_attempts,
+            )
+            return
         self._recovery_in_progress = True
         self._last_recovery_time = now
+        self._recovery_attempts += 1
 
         _LOGGER.warning(
-            "Binary mode recovery: restarting XT-PICO adapter at %s via Telnet...",
+            "Binary mode recovery attempt %d/%d: restarting XT-PICO adapter at %s via Telnet...",
+            self._recovery_attempts,
+            self._max_recovery_attempts,
             self.host,
         )
         adapter_reader = None
@@ -852,7 +876,7 @@ class HeytechApiClient:
             _LOGGER.warning(
                 "Binary mode recovery: adapter restart command sent. "
                 "Disconnecting and waiting %ds for controller reboot...",
-                8,
+                15,
             )
         except Exception:
             _LOGGER.exception(
