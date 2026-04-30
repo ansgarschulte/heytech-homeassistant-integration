@@ -156,6 +156,9 @@ class HeytechApiClient:
         self.system_info: dict[str, str] = {}  # Model, firmware, device number
         self._reconnecting = False
         self._discovery_complete: asyncio.Event | None = None
+        # Prevents recovery from firing concurrently or in a rapid loop.
+        self._recovery_in_progress: bool = False
+        self._last_recovery_time: float = 0.0
 
         self.periodic_task = asyncio.create_task(self._periodic_commands())
 
@@ -798,6 +801,18 @@ class HeytechApiClient:
         resets the serial port and re-asserts DTR=HIGH, which causes the Heytech
         controller to reboot into normal ASCII mode.
         """
+        import time as _time
+
+        # Prevent concurrent recoveries and rapid re-triggering (min 60s cooldown).
+        now = _time.monotonic()
+        if self._recovery_in_progress or (now - self._last_recovery_time) < 60:
+            _LOGGER.debug(
+                "Binary mode recovery: skipping (already in progress or cooldown active)"
+            )
+            return
+        self._recovery_in_progress = True
+        self._last_recovery_time = now
+
         _LOGGER.warning(
             "Binary mode recovery: restarting XT-PICO adapter at %s via Telnet...",
             self.host,
@@ -853,7 +868,7 @@ class HeytechApiClient:
 
         # Disconnect from the controller (binary mode stream) and wait for reboot
         await self.disconnect()
-        await asyncio.sleep(8)
+        await asyncio.sleep(15)  # give controller enough time to fully boot
 
         _LOGGER.warning(
             "Binary mode recovery: attempting reconnect to %s:%s after adapter restart",
@@ -864,12 +879,13 @@ class HeytechApiClient:
             await self.connect()
         except Exception:
             _LOGGER.exception("Binary mode recovery: reconnect failed")
+        finally:
+            self._recovery_in_progress = False
 
     async def _read_output(self) -> None:
         """Read output from the Heytech device."""
         _BINARY_MODE_BYTES = frozenset([0x00, 0x80, 0xF8])
         _binary_mode_warned = False
-        _recovery_triggered = False
         # Manual line buffer — necessary because binary-mode bytes (0x00/0x80/0xF8)
         # never contain 0x0A (newline), which would cause readline() to block forever.
         _buf = bytearray()
@@ -905,8 +921,7 @@ class HeytechApiClient:
                             chunk[:10].hex(),
                         )
                         _binary_mode_warned = True
-                        if self._adapter_password and not _recovery_triggered:
-                            _recovery_triggered = True
+                        if self._adapter_password and not self._recovery_in_progress:
                             _LOGGER.warning(
                                 "Binary mode recovery: adapter password is configured, "
                                 "triggering automatic XT-PICO restart in 3s..."
