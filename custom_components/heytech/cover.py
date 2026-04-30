@@ -51,18 +51,11 @@ async def async_setup_entry(
         "coordinator"
     ]
 
-    # Fetch dynamic shutters from the API
-    try:
-        await api_client.async_read_heytech_data()
-        dynamic_shutters = api_client.shutters
-        groups = api_client.get_groups()
-    except Exception:  # noqa: BLE001
-        _LOGGER.warning(
-            "Failed to discover shutters from device (may be offline). "
-            "Using configured shutters only."
-        )
-        dynamic_shutters = {}
-        groups = {}
+    # Use already-discovered shutters from the API client (populated by coordinator).
+    # Do NOT call async_read_heytech_data() again here — it resets discovery state
+    # and races with the coordinator's initial fetch.
+    dynamic_shutters = api_client.shutters
+    groups = api_client.get_groups()
 
     # Limit the number of dynamic shutters
     max_auto_shutters = int(
