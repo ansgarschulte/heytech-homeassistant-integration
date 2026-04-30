@@ -186,14 +186,14 @@ class HeytechApiClient:
                 # Initialize controller (required after boot/restart)
                 # Send RHI (Hand-Steuerung Initialisierung) + RHE sequence
                 await self._send_initialization_sequence()
-            except (OSError, TimeoutError):
+            except (OSError, TimeoutError) as exc:
                 retries += 1
                 if retries < MAX_RETRIES:
                     _LOGGER.warning(
                         "Connection error (retry %d/%d): %s — retrying...",
                         retries,
                         MAX_RETRIES,
-                        type(Exception).__name__,
+                        exc,
                     )
                 else:
                     _LOGGER.exception("Connection error. Retry %d/%d", retries, MAX_RETRIES)
