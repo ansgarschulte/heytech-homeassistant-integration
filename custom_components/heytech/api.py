@@ -268,10 +268,19 @@ class HeytechApiClient:
         After a power outage the serial-to-IP adapter needs time to boot and
         start its TCP server. This method retries for up to RECONNECT_MAX_DURATION
         seconds so the integration recovers automatically once the adapter is ready.
+
+        Also resets the binary-mode recovery state so the integration will attempt
+        auto-recovery again if the controller is still in binary mode after reconnect.
         """
         _LOGGER.info(
-            "Forcing reconnect to Heytech device at %s:%s", self.host, self.port
+            "Forcing reconnect to Heytech device at %s:%s (resetting recovery state)",
+            self.host, self.port,
         )
+        # Reset so that binary-mode auto-recovery can fire again after this manual reconnect
+        self._recovery_gave_up = False
+        self._recovery_attempts = 0
+        self._recovery_in_progress = False
+        self._last_recovery_time = 0.0
         await self.disconnect()
         await asyncio.sleep(2.0)
 
