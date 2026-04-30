@@ -162,6 +162,7 @@ class HeytechApiClient:
         # Stop retrying after this many failed recovery attempts per session.
         self._recovery_attempts: int = 0
         self._max_recovery_attempts: int = 3
+        self._recovery_gave_up: bool = False
 
         self.periodic_task = asyncio.create_task(self._periodic_commands())
 
@@ -822,14 +823,16 @@ class HeytechApiClient:
             )
             return
         if self._recovery_attempts >= self._max_recovery_attempts:
-            _LOGGER.error(
-                "Binary mode recovery: giving up after %d failed attempts. "
-                "The Heytech controller is stuck in binary boot mode and cannot be "
-                "recovered automatically. Please power-cycle both the controller and "
-                "the XT-PICO adapter (disconnect power for 30s, then reconnect). "
-                "The integration will keep running with cached data.",
-                self._max_recovery_attempts,
-            )
+            if not self._recovery_gave_up:
+                self._recovery_gave_up = True
+                _LOGGER.error(
+                    "Binary mode recovery: giving up after %d failed attempts. "
+                    "The Heytech controller is stuck in binary boot mode and cannot be "
+                    "recovered automatically. Please power-cycle both the controller and "
+                    "the XT-PICO adapter (disconnect power for 30s, then reconnect). "
+                    "The integration will keep running with cached data.",
+                    self._max_recovery_attempts,
+                )
             return
         self._recovery_in_progress = True
         self._last_recovery_time = now
@@ -945,7 +948,7 @@ class HeytechApiClient:
                             chunk[:10].hex(),
                         )
                         _binary_mode_warned = True
-                        if self._adapter_password and not self._recovery_in_progress:
+                        if self._adapter_password and not self._recovery_in_progress and not self._recovery_gave_up:
                             _LOGGER.warning(
                                 "Binary mode recovery: adapter password is configured, "
                                 "triggering automatic XT-PICO restart in 3s..."

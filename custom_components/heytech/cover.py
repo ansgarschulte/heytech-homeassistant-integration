@@ -313,8 +313,13 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
     async def _force_position_refresh_later(self) -> None:
         for _i in range(5):
             await asyncio.sleep(4)
-            await self._api_client.async_read_shutters_positions()
-            await self.coordinator.async_refresh()
+            try:
+                await self._api_client.async_read_shutters_positions()
+                await self.coordinator.async_refresh()
+            except Exception:
+                _LOGGER.debug(
+                    "Position refresh failed for %s (device may be unreachable)", self._name
+                )
         self._is_opening = False
         self._is_closing = False
         self.async_write_ha_state()
