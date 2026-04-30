@@ -303,7 +303,7 @@ class HeytechOptionsFlowHandler(OptionsFlow):
 
         current_password = self._config_entry.data.get(
             CONF_ADAPTER_PASSWORD,
-            self._config_entry.options.get(CONF_ADAPTER_PASSWORD, ""),
+            self._config_entry.options.get(CONF_ADAPTER_PASSWORD, "xtpico"),
         )
         return self.async_show_form(
             step_id="connection_settings",

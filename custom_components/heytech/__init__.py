@@ -88,7 +88,7 @@ async def async_setup_entry(
     host = data[CONF_HOST]
     port = data[CONF_PORT]
     pin = data.get(CONF_PIN, "")
-    adapter_password = data.get(CONF_ADAPTER_PASSWORD, "")
+    adapter_password = data.get(CONF_ADAPTER_PASSWORD, "xtpico")
 
     # Retrieve existing API client instance if available
     api_client = hass.data[DOMAIN][entry.entry_id].get("api_client")
