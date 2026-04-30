@@ -948,7 +948,14 @@ class HeytechApiClient:
                             chunk[:10].hex(),
                         )
                         _binary_mode_warned = True
-                        if self._adapter_password and not self._recovery_in_progress and not self._recovery_gave_up:
+                        if (
+                            self._adapter_password
+                            and not self._recovery_in_progress
+                            and not self._recovery_gave_up
+                            and (
+                                __import__("time").monotonic() - self._last_recovery_time
+                            ) >= 60
+                        ):
                             _LOGGER.warning(
                                 "Binary mode recovery: adapter password is configured, "
                                 "triggering automatic XT-PICO restart in 3s..."

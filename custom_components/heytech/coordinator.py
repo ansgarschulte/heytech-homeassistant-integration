@@ -56,7 +56,6 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(
                 "Initial data fetch failed (device may still be booting). "
                 "The integration will retry automatically.",
-                exc_info=True,
             )
 
     async def _async_update_data(self) -> dict[str, dict[any, any]]:

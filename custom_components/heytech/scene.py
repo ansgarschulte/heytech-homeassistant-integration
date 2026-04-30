@@ -48,7 +48,6 @@ async def async_setup_entry(
         except Exception:  # noqa: BLE001
             _LOGGER.warning(
                 "Failed to discover scenarios (device may still be booting)",
-                exc_info=True,
             )
 
     if not scenarios:
