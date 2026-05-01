@@ -14,4 +14,4 @@ DEFAULT_MAX_AUTO_SHUTTERS = 10
 # When set, enables automatic binary-mode recovery after power outages by
 # restarting the adapter interface, which pulses the DTR line and causes
 # the controller to reboot into normal ASCII mode.
-CONF_ADAPTER_PASSWORD = "adapter_password"
+CONF_ADAPTER_PASSWORD = "adapter_password"  # noqa: S105

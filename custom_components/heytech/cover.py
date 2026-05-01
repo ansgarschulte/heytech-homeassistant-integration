@@ -316,9 +316,10 @@ class HeytechCover(CoordinatorEntity[HeytechDataUpdateCoordinator], CoverEntity)
             try:
                 await self._api_client.async_read_shutters_positions()
                 await self.coordinator.async_refresh()
-            except Exception:
+            except (OSError, ConnectionError, TimeoutError):
                 _LOGGER.debug(
-                    "Position refresh failed for %s (device may be unreachable)", self._name
+                    "Position refresh failed for %s (device may be unreachable)",
+                    self._name,
                 )
         self._is_opening = False
         self._is_closing = False

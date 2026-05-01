@@ -19,7 +19,14 @@ from .api import (
     IntegrationHeytechApiClientCommunicationError,
     IntegrationHeytechApiClientError,
 )
-from .const import CONF_ADAPTER_PASSWORD, CONF_MAX_AUTO_SHUTTERS, CONF_PIN, CONF_SHUTTERS, DOMAIN, LOGGER
+from .const import (
+    CONF_ADAPTER_PASSWORD,
+    CONF_MAX_AUTO_SHUTTERS,
+    CONF_PIN,
+    CONF_SHUTTERS,
+    DOMAIN,
+    LOGGER,
+)
 
 if TYPE_CHECKING:
     from homeassistant import data_entry_flow

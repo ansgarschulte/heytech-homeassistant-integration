@@ -6,7 +6,9 @@ without using external libraries.
 """
 
 import asyncio
+import contextlib
 import logging
+import time as _time
 from asyncio import Queue
 from datetime import datetime
 from typing import Any
@@ -108,7 +110,7 @@ class HeytechApiClient:
         port: int = 1002,
         pin: str = "",
         idle_timeout: int = 10,
-        adapter_password: str = "xtpico",
+        adapter_password: str = "xtpico",  # noqa: S107
     ) -> None:
         """
         Initialize the API client.
@@ -200,7 +202,9 @@ class HeytechApiClient:
                         exc,
                     )
                 else:
-                    _LOGGER.exception("Connection error. Retry %d/%d", retries, MAX_RETRIES)
+                    _LOGGER.exception(
+                        "Connection error. Retry %d/%d", retries, MAX_RETRIES
+                    )
                 await asyncio.sleep(RETRY_DELAY)
         if not self.connected:
             _LOGGER.error(
@@ -238,8 +242,10 @@ class HeytechApiClient:
             self.writer.write(bytes([0xFF, 0xFA, 0x2C, 0x0C, 0x08, 0xFF, 0xF0]))
             await self.writer.drain()
             _LOGGER.debug("RFC 2217: DTR HIGH command sent")
-        except Exception:
-            _LOGGER.debug("RFC 2217 DTR negotiation failed (adapter may not support it)")
+        except (OSError, ConnectionError):
+            _LOGGER.debug(
+                "RFC 2217 DTR negotiation failed (adapter may not support it)"
+            )
 
     async def _send_initialization_sequence(self) -> None:
         """
@@ -312,7 +318,7 @@ class HeytechApiClient:
             "Forcing reconnect to Heytech device at %s:%s (resetting recovery state)",
             self.host, self.port,
         )
-        # Reset so that binary-mode auto-recovery can fire again after this manual reconnect
+        # Reset so that binary-mode auto-recovery can fire again after manual reconnect
         self._recovery_gave_up = False
         self._recovery_attempts = 0
         self._recovery_in_progress = False
@@ -884,7 +890,7 @@ class HeytechApiClient:
                 # Escaped 0xFF — emit one literal 0xFF
                 out.append(0xFF)
                 i += 2
-            elif cmd in (0xFA,):
+            elif cmd == 0xFA:
                 # SB subnegotiation: skip until IAC SE (0xFF 0xF0)
                 end = i + 2
                 while end < len(data) - 1:
@@ -911,13 +917,10 @@ class HeytechApiClient:
         resets the serial port and re-asserts DTR=HIGH, which causes the Heytech
         controller to reboot into normal ASCII mode.
         """
-        import time as _time
-
-        # Prevent concurrent recoveries and rapid re-triggering (min 60s cooldown).
         now = _time.monotonic()
         if self._recovery_in_progress or (now - self._last_recovery_time) < 60:
             _LOGGER.debug(
-                "Binary mode recovery: skipping (already in progress or cooldown active)"
+                "Binary mode recovery: skipping (in progress or cooldown active)"
             )
             return
         if self._recovery_attempts >= self._max_recovery_attempts:
@@ -925,9 +928,10 @@ class HeytechApiClient:
                 self._recovery_gave_up = True
                 _LOGGER.error(
                     "Binary mode recovery: giving up after %d failed attempts. "
-                    "The Heytech controller is stuck in binary boot mode and cannot be "
-                    "recovered automatically. Please power-cycle both the controller and "
-                    "the XT-PICO adapter (disconnect power for 30s, then reconnect). "
+                    "The Heytech controller is stuck in binary boot mode and "
+                    "cannot be recovered automatically. Please power-cycle both "
+                    "the controller and the XT-PICO adapter "
+                    "(disconnect power for 30s, then reconnect). "
                     "The integration will keep running with cached data.",
                     self._max_recovery_attempts,
                 )
@@ -937,7 +941,8 @@ class HeytechApiClient:
         self._recovery_attempts += 1
 
         _LOGGER.warning(
-            "Binary mode recovery attempt %d/%d: restarting XT-PICO adapter at %s via Telnet...",
+            "Binary mode recovery attempt %d/%d: "
+            "restarting XT-PICO adapter at %s via Telnet...",
             self._recovery_attempts,
             self._max_recovery_attempts,
             self.host,
@@ -953,10 +958,8 @@ class HeytechApiClient:
             # Drain initial Telnet negotiation / password prompt
             await asyncio.sleep(0.5)
             # Discard any pending bytes (Telnet option negotiation + "Password" prompt)
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(adapter_reader.read(1024), timeout=2)
-            except TimeoutError:
-                pass
 
             # Send the management password
             adapter_writer.write(f"{self._adapter_password}\r\n".encode())
@@ -964,10 +967,8 @@ class HeytechApiClient:
 
             # Wait for the main menu to appear
             await asyncio.sleep(1.0)
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(adapter_reader.read(2048), timeout=2)
-            except TimeoutError:
-                pass
 
             # Send restart command from main menu
             adapter_writer.write(b"R\r\n")
@@ -988,8 +989,8 @@ class HeytechApiClient:
                 try:
                     adapter_writer.close()
                     await adapter_writer.wait_closed()
-                except Exception:
-                    pass
+                except (OSError, RuntimeError):
+                    _LOGGER.debug("Failed to close adapter writer cleanly")
 
         # Disconnect from the controller (binary mode stream) and wait for reboot
         await self.disconnect()
@@ -1009,12 +1010,12 @@ class HeytechApiClient:
 
     async def _read_output(self) -> None:
         """Read output from the Heytech device."""
-        _BINARY_MODE_BYTES = frozenset([0x00, 0x80, 0xF8])
+        binary_mode_bytes = frozenset([0x00, 0x80, 0xF8])
         # Grace period: ignore binary-looking bytes right after connect.
         # The XT-PICO may send UART framing artifacts and Telnet negotiation
         # bytes during its own startup. Only declare binary mode if these bytes
         # persist well beyond the initial connection window.
-        _BINARY_MODE_GRACE = 20.0  # seconds
+        binary_mode_grace = 20.0  # seconds
         _connect_time = asyncio.get_event_loop().time()
         _binary_mode_warned = False
         # Manual line buffer — necessary because binary-mode bytes (0x00/0x80/0xF8)
@@ -1048,14 +1049,14 @@ class HeytechApiClient:
                 # so readline() would block indefinitely — hence the read() approach.
                 # Skip detection during the grace period: the XT-PICO serial line
                 # may emit framing noise before stabilising.
-                if set(chunk).issubset(_BINARY_MODE_BYTES):
+                if set(chunk).issubset(binary_mode_bytes):
                     elapsed = asyncio.get_event_loop().time() - _connect_time
-                    if elapsed < _BINARY_MODE_GRACE:
+                    if elapsed < binary_mode_grace:
                         _LOGGER.debug(
                             "Ignoring binary-looking bytes during grace period "
                             "(%.0fs / %.0fs elapsed): %s",
                             elapsed,
-                            _BINARY_MODE_GRACE,
+                            binary_mode_grace,
                             chunk[:6].hex(),
                         )
                         continue
@@ -1067,8 +1068,9 @@ class HeytechApiClient:
                             "To fix: power-cycle ONLY the Heytech controller "
                             "(not the serial-to-IP adapter). "
                             "If using an XT-PICO adapter, ensure DTR Protocol=1 "
-                            "in the adapter config (Telnet port 23, password 'xtpico') "
-                            "so the controller wakes normally on future power cycles.",
+                            "in the adapter config (Telnet port 23, password "
+                            "'xtpico') so the controller wakes normally on future "
+                            "power cycles.",
                             chunk[:10].hex(),
                         )
                         _binary_mode_warned = True
@@ -1077,7 +1079,7 @@ class HeytechApiClient:
                             and not self._recovery_in_progress
                             and not self._recovery_gave_up
                             and (
-                                __import__("time").monotonic() - self._last_recovery_time
+                                _time.monotonic() - self._last_recovery_time
                             ) >= 60
                         ):
                             _LOGGER.warning(
@@ -1106,7 +1108,7 @@ class HeytechApiClient:
                         self.shutter_positions = parse_sop_shutter_positions(line)
                     elif START_SMN in line and END_SMN in line:
                         one_shutter = parse_smn_motor_names_output(line)
-    
+
                         # Check if this is a scenario or a regular shutter
                         for name, data in one_shutter.items():
                             channel = data["channel"]
@@ -1125,7 +1127,7 @@ class HeytechApiClient:
                                     "channel": channel,
                                     "name": name,
                                 }
-    
+
                         # Signal discovery complete when all channels processed
                         if (
                             self._discovery_complete
