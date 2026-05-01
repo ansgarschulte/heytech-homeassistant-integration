@@ -184,6 +184,9 @@ class HeytechApiClient:
                     "Connected to Heytech device at %s:%s", self.host, self.port
                 )
 
+                # Assert DTR HIGH via RFC 2217 so the controller boots in ASCII mode
+                await self._negotiate_rfc2217_dtr()
+
                 # Initialize controller (required after boot/restart)
                 # Send RHI (Hand-Steuerung Initialisierung) + RHE sequence
                 await self._send_initialization_sequence()
@@ -205,6 +208,38 @@ class HeytechApiClient:
             )
             message = "Failed to connect to Heytech device"
             raise IntegrationHeytechApiClientCommunicationError(message)
+
+    async def _negotiate_rfc2217_dtr(self) -> None:
+        """
+        Send RFC 2217 Telnet COM port control commands to assert DTR HIGH.
+
+        When connecting to the XT-PICO serial-to-IP adapter, this sets DTR
+        HIGH on the physical RS232 port so the Heytech controller boots in
+        normal ASCII mode rather than binary boot mode.
+
+        The XT-PICO supports the Telnet protocol and likely RFC 2217 (COM port
+        control option). If it does not, these bytes are silently ignored.
+
+        RFC 2217 command sequence:
+          IAC WILL COM-PORT-OPTION      (0xFF 0xFB 0x2C) — announce support
+          IAC SB COM-PORT-OPTION        (0xFF 0xFA 0x2C)
+            SET-CONTROL DTR-SIGNAL-ON   (0x0C 0x08)
+          IAC SE                        (0xFF 0xF0)
+        """
+        if not self.writer:
+            return
+        try:
+            _LOGGER.debug("RFC 2217: asserting DTR HIGH on XT-PICO serial port")
+            # Announce that we support the COM-PORT-OPTION (0x2C = 44)
+            self.writer.write(bytes([0xFF, 0xFB, 0x2C]))
+            await self.writer.drain()
+            await asyncio.sleep(0.05)
+            # SET-CONTROL (0x0C) with DTR-SIGNAL-ON (0x08)
+            self.writer.write(bytes([0xFF, 0xFA, 0x2C, 0x0C, 0x08, 0xFF, 0xF0]))
+            await self.writer.drain()
+            _LOGGER.debug("RFC 2217: DTR HIGH command sent")
+        except Exception:
+            _LOGGER.debug("RFC 2217 DTR negotiation failed (adapter may not support it)")
 
     async def _send_initialization_sequence(self) -> None:
         """
@@ -816,6 +851,58 @@ class HeytechApiClient:
 
         self.connection_task = None
 
+    @staticmethod
+    def _strip_telnet_iac(data: bytes) -> bytes:
+        """Remove Telnet IAC negotiation sequences from received data.
+
+        The XT-PICO serial-to-IP adapter uses the Telnet protocol and emits
+        IAC (0xFF) option negotiation bytes alongside the normal ASCII data.
+        These must be stripped before line parsing to avoid corrupted output.
+
+        IAC sequence formats:
+          0xFF 0xFB/0xFC/0xFD/0xFE <option>   — WILL/WONT/DO/DONT (3 bytes)
+          0xFF 0xFA … 0xFF 0xF0               — SB subnegotiation block
+          0xFF 0xFF                           — escaped literal 0xFF in data
+        """
+        if 0xFF not in data:
+            return data
+        out = bytearray()
+        i = 0
+        while i < len(data):
+            b = data[i]
+            if b != 0xFF:
+                out.append(b)
+                i += 1
+                continue
+            # IAC byte — decode the sequence
+            if i + 1 >= len(data):
+                # Incomplete IAC at the end; discard the lone 0xFF
+                i += 1
+                break
+            cmd = data[i + 1]
+            if cmd == 0xFF:
+                # Escaped 0xFF — emit one literal 0xFF
+                out.append(0xFF)
+                i += 2
+            elif cmd in (0xFA,):
+                # SB subnegotiation: skip until IAC SE (0xFF 0xF0)
+                end = i + 2
+                while end < len(data) - 1:
+                    if data[end] == 0xFF and data[end + 1] == 0xF0:
+                        end += 2
+                        break
+                    end += 1
+                else:
+                    end = len(data)  # Incomplete block; skip rest
+                i = end
+            elif cmd in (0xFB, 0xFC, 0xFD, 0xFE):
+                # WILL/WONT/DO/DONT + option byte (3 bytes total)
+                i += 3
+            else:
+                # Unknown command byte after IAC; skip IAC + command
+                i += 2
+        return bytes(out)
+
     async def _attempt_adapter_restart_recovery(self) -> None:
         """Restart the XT-PICO adapter interface to recover from binary boot mode.
 
@@ -923,6 +1010,12 @@ class HeytechApiClient:
     async def _read_output(self) -> None:
         """Read output from the Heytech device."""
         _BINARY_MODE_BYTES = frozenset([0x00, 0x80, 0xF8])
+        # Grace period: ignore binary-looking bytes right after connect.
+        # The XT-PICO may send UART framing artifacts and Telnet negotiation
+        # bytes during its own startup. Only declare binary mode if these bytes
+        # persist well beyond the initial connection window.
+        _BINARY_MODE_GRACE = 20.0  # seconds
+        _connect_time = asyncio.get_event_loop().time()
         _binary_mode_warned = False
         # Manual line buffer — necessary because binary-mode bytes (0x00/0x80/0xF8)
         # never contain 0x0A (newline), which would cause readline() to block forever.
@@ -941,11 +1034,31 @@ class HeytechApiClient:
                     await self.disconnect()
                     break
 
+                # Strip Telnet IAC negotiation sequences before processing.
+                # The XT-PICO uses the Telnet protocol and sends IAC (0xFF)
+                # option negotiation bytes at connect time. These must be
+                # filtered out so they do not corrupt the ASCII data stream.
+                chunk = self._strip_telnet_iac(chunk)
+                if not chunk:
+                    continue
+
                 # Detect post-power-outage binary boot mode.
                 # The controller sends UART bit-encoded bytes (only 0x00/0x80/0xF8)
                 # when stuck in binary boot mode. These bytes never contain '\n',
                 # so readline() would block indefinitely — hence the read() approach.
+                # Skip detection during the grace period: the XT-PICO serial line
+                # may emit framing noise before stabilising.
                 if set(chunk).issubset(_BINARY_MODE_BYTES):
+                    elapsed = asyncio.get_event_loop().time() - _connect_time
+                    if elapsed < _BINARY_MODE_GRACE:
+                        _LOGGER.debug(
+                            "Ignoring binary-looking bytes during grace period "
+                            "(%.0fs / %.0fs elapsed): %s",
+                            elapsed,
+                            _BINARY_MODE_GRACE,
+                            chunk[:6].hex(),
+                        )
+                        continue
                     if not _binary_mode_warned:
                         _LOGGER.error(
                             "Heytech controller is in binary boot mode "
