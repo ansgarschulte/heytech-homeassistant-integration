@@ -33,10 +33,12 @@ async def async_setup_entry(
     ]
 
     # Create button entity for time synchronization
-    async_add_entities([
-        HeytechSyncTimeButton(coordinator, api_client, entry.entry_id),
-        HeytechReconnectButton(coordinator, api_client, entry.entry_id),
-    ])
+    async_add_entities(
+        [
+            HeytechSyncTimeButton(coordinator, api_client, entry.entry_id),
+            HeytechReconnectButton(coordinator, api_client, entry.entry_id),
+        ]
+    )
 
 
 class HeytechSyncTimeButton(CoordinatorEntity, ButtonEntity):

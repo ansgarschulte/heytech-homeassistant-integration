@@ -316,7 +316,8 @@ class HeytechApiClient:
         """
         _LOGGER.info(
             "Forcing reconnect to Heytech device at %s:%s (resetting recovery state)",
-            self.host, self.port,
+            self.host,
+            self.port,
         )
         # Reset so that binary-mode auto-recovery can fire again after manual reconnect
         self._recovery_gave_up = False
@@ -334,7 +335,9 @@ class HeytechApiClient:
             try:
                 _LOGGER.info(
                     "Reconnect attempt %d (elapsed %.0fs / %ds)",
-                    attempt, elapsed, RECONNECT_MAX_DURATION,
+                    attempt,
+                    elapsed,
+                    RECONNECT_MAX_DURATION,
                 )
                 await self.connect()
             except IntegrationHeytechApiClientCommunicationError:
@@ -342,12 +345,15 @@ class HeytechApiClient:
                 if elapsed >= RECONNECT_MAX_DURATION:
                     _LOGGER.exception(
                         "Reconnect failed after %d attempts (%.0fs). Giving up.",
-                        attempt, elapsed,
+                        attempt,
+                        elapsed,
                     )
                     raise
                 _LOGGER.warning(
                     "Reconnect attempt %d failed, retrying in %ds... (%.0fs elapsed)",
-                    attempt, RECONNECT_RETRY_INTERVAL, elapsed,
+                    attempt,
+                    RECONNECT_RETRY_INTERVAL,
+                    elapsed,
                 )
                 # Make sure connected flag is reset before next attempt
                 self.connected = False
@@ -1078,9 +1084,7 @@ class HeytechApiClient:
                             self._adapter_password
                             and not self._recovery_in_progress
                             and not self._recovery_gave_up
-                            and (
-                                _time.monotonic() - self._last_recovery_time
-                            ) >= 60
+                            and (_time.monotonic() - self._last_recovery_time) >= 60
                         ):
                             _LOGGER.warning(
                                 "Binary mode recovery: adapter password is configured, "

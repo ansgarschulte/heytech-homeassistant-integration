@@ -94,4 +94,3 @@ class HeytechDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(error_message) from exception
         else:
             return result
-
