@@ -219,10 +219,11 @@ class HeytechApiClient:
 
         try:
             _LOGGER.info("Sending controller initialization sequence (RHI/RHE)")
-            # Commands use leading space + CR only (from HEYcontrol.exe protocol analysis)
             init_commands = [
-                " rhi\r",  # Hand-Steuerung Initialisierung
-                " rhe\r",  # Hand-Steuerung exit
+                "rhi\r\n",  # Hand-Steuerung Initialisierung
+                "\r\n",
+                "rhe\r\n",  # Hand-Steuerung exit
+                "\r\n",
             ]
 
             for cmd in init_commands:
@@ -342,22 +343,25 @@ class HeytechApiClient:
         if self._pin:
             commands.extend(
                 [
-                    " rsc\r",
-                    f"{self._pin}\r",
+                    "rsc\r\n",
+                    f"{self._pin}\r\n",
                 ]
             )
 
         if not channels:
-            commands.append(f"{shutter_command}\r")
+            commands.append(f"{shutter_command}\r\n")
         else:
             for channel in channels:
                 commands.extend(
                     [
-                        " rhi\r",
-                        " rhb\r",
-                        f"{channel}\r",
-                        f"{shutter_command}\r",
-                        " rhe\r",
+                        "rhi\r\n",
+                        "\r\n",
+                        "rhb\r\n",
+                        f"{channel}\r\n",
+                        f"{shutter_command}\r\n",
+                        "\r\n",
+                        "rhe\r\n",
+                        "\r\n",
                     ]
                 )
 
@@ -525,15 +529,14 @@ class HeytechApiClient:
 
         commands = []
         if self._pin:
-            commands.extend([" rsc\r", f"{self._pin}\r"])
+            commands.extend(["rsc\r\n", f"{self._pin}\r\n"])
 
         # Based on .exe analysis: send rsa, then scenario number, then rhe
-        # r* commands use leading space + CR only
         commands.extend(
             [
-                " rsa\r",
-                f"{scenario_number}\r",
-                " rhe\r",
+                "rsa\r\n",
+                f"{scenario_number}\r\n",
+                "rhe\r\n",
             ]
         )
 
@@ -700,20 +703,19 @@ class HeytechApiClient:
         )
 
         # Build command sequence according to HEYcontrol.exe protocol
-        # r* commands use leading space + CR only (from exe analysis)
         commands = [
-            " rdt\r",
-            f"{year}\r",
-            f"{month}\r",
-            f"{day}\r",
-            f"{hour}\r",
-            f"{minute}\r",
-            f"{second}\r",
-            f"{checksum}\r",
+            "rdt\r\n",
+            f"{year}\r\n",
+            f"{month}\r\n",
+            f"{day}\r\n",
+            f"{hour}\r\n",
+            f"{minute}\r\n",
+            f"{second}\r\n",
+            f"{checksum}\r\n",
         ]
 
         if self._pin:
-            commands = [" rsc\r", f"{self._pin}\r", *commands]
+            commands = ["rsc\r\n", f"{self._pin}\r\n", *commands]
 
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
