@@ -261,8 +261,10 @@ class HeytechApiClient:
         try:
             _LOGGER.info("Sending controller initialization sequence (RHI/RHE)")
             init_commands = [
-                " rhi\r",  # Hand-Steuerung Initialisierung (leading space + CR only, per exe)
-                " rhe\r",  # Hand-Steuerung exit
+                "rhi\r\n",
+                "\r\n",
+                "rhe\r\n",
+                "\r\n",
             ]
 
             for cmd in init_commands:
@@ -388,7 +390,7 @@ class HeytechApiClient:
         if self._pin:
             commands.extend(
                 [
-                    " rsc\r",
+                    "rsc\r\n",
                     f"{self._pin}\r\n",
                 ]
             )
@@ -399,11 +401,14 @@ class HeytechApiClient:
             for channel in channels:
                 commands.extend(
                     [
-                        " rhi\r",
-                        " rhb\r",
+                        "rhi\r\n",
+                        "\r\n",
+                        "rhb\r\n",
                         f"{channel}\r\n",
                         f"{shutter_command}\r\n",
-                        " rhe\r",
+                        "\r\n",
+                        "rhe\r\n",
+                        "\r\n",
                     ]
                 )
 
@@ -571,13 +576,13 @@ class HeytechApiClient:
 
         commands = []
         if self._pin:
-            commands.extend([" rsc\r", f"{self._pin}\r\n"])
+            commands.extend(["rsc\r\n", f"{self._pin}\r\n"])
 
         commands.extend(
             [
-                " rsa\r",
+                "rsa\r\n",
                 f"{scenario_number}\r\n",
-                " rhe\r",
+                "rhe\r\n",
             ]
         )
 
@@ -689,7 +694,7 @@ class HeytechApiClient:
         _LOGGER.info("Clearing logbook")
         commands = ["sll\r\n"]
         if self._pin:
-            commands = [" rsc\r", f"{self._pin}\r\n", *commands]
+            commands = ["rsc\r\n", f"{self._pin}\r\n", *commands]
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
             self.connection_task = asyncio.create_task(self._process_commands())
@@ -745,7 +750,7 @@ class HeytechApiClient:
 
         # Build command sequence according to HEYcontrol.exe protocol
         commands = [
-            " rdt\r",
+            "rdt\r\n",
             f"{year}\r\n",
             f"{month}\r\n",
             f"{day}\r\n",
@@ -756,7 +761,7 @@ class HeytechApiClient:
         ]
 
         if self._pin:
-            commands = [" rsc\r", f"{self._pin}\r\n", *commands]
+            commands = ["rsc\r\n", f"{self._pin}\r\n", *commands]
 
         await self.command_queue.put(commands)
         if self.connection_task is None or self.connection_task.done():
@@ -1143,7 +1148,7 @@ class HeytechApiClient:
                             _rhi_attempt_count,
                         )
                         try:
-                            self.writer.write(b" rhi\r")
+                            self.writer.write(b"rhi\r\n\r\n")
                             await self.writer.drain()
                         except (OSError, ConnectionError):
                             pass
