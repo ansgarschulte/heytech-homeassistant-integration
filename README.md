@@ -19,11 +19,6 @@ Control your Heytech shutter system directly from Home Assistant.
 
 ### 1.6.0
 - 🔄 **Automatic binary mode recovery** after power outages via XTVCom protocol (port 11011) — no configuration required
-- 🗑️ Removed manual reconnect button and service (no longer needed)
-- 🗑️ Removed XT-PICO adapter password configuration (Telnet fallback removed)
-
-### 1.5.9
-- 🐛 Fix: disconnect port 1002 before XTVCom recovery attempt to avoid port conflict on XT-PICO
 
 ### 1.5.1
 - 🐛 Bug fixes for logbook reading and time synchronization
