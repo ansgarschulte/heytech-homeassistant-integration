@@ -18,7 +18,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
 from .api import HeytechApiClient
-from .const import CONF_ADAPTER_PASSWORD, CONF_PIN, CONF_SHUTTERS, DOMAIN
+from .const import CONF_PIN, CONF_SHUTTERS, DOMAIN
 from .coordinator import HeytechDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -40,7 +40,6 @@ SERVICE_CONTROL_GROUP = "control_group"
 SERVICE_EXPORT_SHUTTERS = "export_shutters_config"
 SERVICE_IMPORT_SHUTTERS = "import_shutters_config"
 SERVICE_SYNC_TIME = "sync_time"
-SERVICE_RECONNECT = "reconnect"
 
 SCHEMA_READ_LOGBOOK = vol.Schema(
     {
@@ -71,8 +70,6 @@ SCHEMA_IMPORT_SHUTTERS = vol.Schema(
 
 SCHEMA_SYNC_TIME = vol.Schema({})
 
-SCHEMA_RECONNECT = vol.Schema({})
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -88,7 +85,6 @@ async def async_setup_entry(
     host = data[CONF_HOST]
     port = data[CONF_PORT]
     pin = data.get(CONF_PIN, "")
-    adapter_password = data.get(CONF_ADAPTER_PASSWORD, "xtpico")
 
     # Retrieve existing API client instance if available
     api_client = hass.data[DOMAIN][entry.entry_id].get("api_client")
@@ -98,9 +94,7 @@ async def async_setup_entry(
         # Implement logic to update the API client if needed
     else:
         _LOGGER.debug("Creating Heytech API client.")
-        api_client = HeytechApiClient(
-            host=host, port=port, pin=pin, adapter_password=adapter_password
-        )
+        api_client = HeytechApiClient(host=host, port=port, pin=pin)
         hass.data[DOMAIN][entry.entry_id]["api_client"] = api_client
 
     # Initialize the DataUpdateCoordinator for periodic updates
@@ -337,49 +331,6 @@ async def async_setup_services(
                 {"error": "Time sync failed"},
             )
 
-    async def handle_reconnect(_call: ServiceCall) -> None:
-        """Handle the reconnect service call.
-
-        Forces a clean disconnect and reconnect to the Heytech controller.
-        Use this after a power outage when the controller becomes unreachable.
-        """
-        _LOGGER.info("Forcing reconnect to Heytech controller")
-        try:
-            await api_client.async_reconnect()
-            _LOGGER.info("Reconnect successful")
-
-            await hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "message": "Reconnected successfully to Heytech controller.",
-                    "title": "Heytech Reconnect",
-                    "notification_id": "heytech_reconnect_success",
-                },
-            )
-
-            hass.bus.async_fire("heytech_reconnected")
-        except Exception:
-            _LOGGER.exception("Failed to reconnect")
-
-            await hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "message": (
-                        "Failed to reconnect to Heytech controller. "
-                        "Check the logs for details."
-                    ),
-                    "title": "Heytech Reconnect Failed",
-                    "notification_id": "heytech_reconnect_failed",
-                },
-            )
-
-            hass.bus.async_fire(
-                "heytech_reconnect_failed",
-                {"error": "Reconnect failed"},
-            )
-
     # Register services only once
     if not hass.services.has_service(DOMAIN, SERVICE_READ_LOGBOOK):
         hass.services.async_register(
@@ -429,14 +380,6 @@ async def async_setup_services(
             schema=SCHEMA_SYNC_TIME,
         )
 
-    if not hass.services.has_service(DOMAIN, SERVICE_RECONNECT):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_RECONNECT,
-            handle_reconnect,
-            schema=SCHEMA_RECONNECT,
-        )
-
 
 async def async_reload_entry(
     hass: HomeAssistant,
@@ -473,7 +416,6 @@ async def async_unload_entry(
             hass.services.async_remove(DOMAIN, SERVICE_EXPORT_SHUTTERS)
             hass.services.async_remove(DOMAIN, SERVICE_IMPORT_SHUTTERS)
             hass.services.async_remove(DOMAIN, SERVICE_SYNC_TIME)
-            hass.services.async_remove(DOMAIN, SERVICE_RECONNECT)
 
         _LOGGER.info(
             "Heytech integration entry %s unloaded successfully", entry.entry_id
