@@ -985,6 +985,16 @@ class HeytechApiClient:
         )
 
         # ── Strategy 1: XTVCom recovery via port 11011 ───────────────────────
+        # Disconnect port 1002 first: the XT-PICO only allows one concurrent
+        # TCP connection to the serial port, so port 11011 is rejected while
+        # port 1002 is still open.
+        _LOGGER.warning(
+            "Binary mode recovery: disconnecting port 1002 before"
+            " trying XTVCom port %d...",
+            _XTVCOM_PORT,
+        )
+        await self.disconnect()
+
         xtvcom_ok = False
         xtvcom_writer = None
         try:
@@ -1005,8 +1015,8 @@ class HeytechApiClient:
             await asyncio.sleep(1.0)
             xtvcom_ok = True
             _LOGGER.warning(
-                "Binary mode recovery: XTVCom rhi sent. "
-                "Disconnecting port 1002 and waiting 5s for controller to recover..."
+                "Binary mode recovery: XTVCom rhi sent."
+                " Waiting 5s for controller to recover..."
             )
         except Exception:
             _LOGGER.exception(
@@ -1021,8 +1031,6 @@ class HeytechApiClient:
                     await xtvcom_writer.wait_closed()
 
         if xtvcom_ok:
-            # XTVCom init sent — disconnect and give the controller a moment
-            await self.disconnect()
             await asyncio.sleep(5)
         else:
             # ── Strategy 2: Telnet management port 23 ────────────────────────
