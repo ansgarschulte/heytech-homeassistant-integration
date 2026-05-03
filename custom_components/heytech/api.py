@@ -86,6 +86,18 @@ SKD_INTERVAL = 300  # seconds - Poll climate every 5 minutes (was 120)
 # Channel constants
 SCENARIO_CHANNEL_START = 65  # Scenarios start at channel 65
 
+# XTVCom recovery (port 11011) — used to wake the controller out of binary boot mode
+_XTVCOM_PORT = 11011
+# Session handshake sent by HEYcontrol.exe when connecting to port 11011
+_XTVCOM_HANDSHAKE = bytes(
+    [
+        0x02, 0x90, 0x06, 0x06, 0x04, 0x01, 0x05, 0x01,
+        0x03, 0x53, 0x02, 0x90, 0x01, 0x05, 0x03, 0x53,
+    ]
+)
+# " rhi\r" encoded as UTF-16-BE (leading space required by XTVCom protocol)
+_XTVCOM_RHI_CMD = " rhi\r".encode("utf-16-be")
+
 
 class IntegrationHeytechApiClientError(Exception):
     """Exception to indicate a general API error."""
@@ -915,12 +927,18 @@ class HeytechApiClient:
         return bytes(out)
 
     async def _attempt_adapter_restart_recovery(self) -> None:
-        """Restart the XT-PICO adapter interface to recover from binary boot mode.
+        """Recover the Heytech controller from binary boot mode.
 
-        Connects to the adapter's Telnet management port (23), logs in with the
-        configured adapter password, and sends the restart command. This briefly
-        resets the serial port and re-asserts DTR=HIGH, which causes the Heytech
-        controller to reboot into normal ASCII mode.
+        Tries two strategies in order:
+
+        1. **XTVCom (port 11011)** — sends the XTVCom session handshake followed
+           by a UTF-16BE ``rhi`` initialisation command.  No credentials required.
+           On success the controller exits binary mode within ~5 seconds.
+
+        2. **XT-PICO Telnet (port 23)** — fallback when port 11011 is not
+           reachable.  Logs into the management interface, sets DTR Protocol=2
+           (Always HIGH) and restarts the adapter interface.  Requires
+           ``adapter_password`` to be configured.
         """
         now = _time.monotonic()
         if self._recovery_in_progress or (now - self._last_recovery_time) < 60:
@@ -946,125 +964,180 @@ class HeytechApiClient:
         self._recovery_attempts += 1
 
         _LOGGER.warning(
-            "Binary mode recovery attempt %d/%d: "
-            "restarting XT-PICO adapter at %s via Telnet...",
+            "Binary mode recovery attempt %d/%d for %s",
             self._recovery_attempts,
             self._max_recovery_attempts,
             self.host,
         )
-        adapter_reader = None
-        adapter_writer = None
+
+        # ── Strategy 1: XTVCom recovery via port 11011 ───────────────────────
+        xtvcom_ok = False
+        xtvcom_writer = None
         try:
-            adapter_reader, adapter_writer = await asyncio.wait_for(
-                asyncio.open_connection(self.host, 23),
-                timeout=10,
+            _LOGGER.warning(
+                "Binary mode recovery: trying XTVCom port %d on %s...",
+                _XTVCOM_PORT,
+                self.host,
             )
-
-            # Drain initial Telnet negotiation / password prompt
-            await asyncio.sleep(0.5)
-            # Discard any pending bytes (Telnet option negotiation + "Password" prompt)
-            with contextlib.suppress(TimeoutError):
-                data = await asyncio.wait_for(adapter_reader.read(1024), timeout=2)
-                _LOGGER.debug(
-                    "XT-PICO banner: %s", data.decode("latin-1", errors="replace")
-                )
-
-            # Send the management password
-            adapter_writer.write(f"{self._adapter_password}\r\n".encode())
-            await adapter_writer.drain()
-
-            # Wait for the main menu to appear
+            _, xtvcom_writer = await asyncio.wait_for(
+                asyncio.open_connection(self.host, _XTVCOM_PORT),
+                timeout=5,
+            )
+            xtvcom_writer.write(_XTVCOM_HANDSHAKE)
+            await xtvcom_writer.drain()
+            await asyncio.sleep(0.3)
+            xtvcom_writer.write(_XTVCOM_RHI_CMD)
+            await xtvcom_writer.drain()
             await asyncio.sleep(1.0)
-            with contextlib.suppress(TimeoutError):
-                data = await asyncio.wait_for(adapter_reader.read(2048), timeout=2)
-                _LOGGER.debug(
-                    "XT-PICO main menu: %s",
-                    data.decode("latin-1", errors="replace"),
-                )
-
-            # Navigate to SERIAL1 Config to ensure DTR Protocol=2 (Always HIGH).
-            # XT-PICO menu path: I -> 1 -> 1 -> set 8=2 -> Q -> Q -> Q
-            # DTR Protocol=2 = Always HIGH: ensures the Heytech controller sees
-            # DTR HIGH during its boot window on the next power-up, preventing
-            # it from entering binary boot mode.
+            xtvcom_ok = True
             _LOGGER.warning(
-                "Binary mode recovery: ensuring DTR Protocol=2 "
-                "(Always HIGH) on XT-PICO..."
-            )
-            adapter_writer.write(b"I\r\n")  # Interface Menu
-            await adapter_writer.drain()
-            await asyncio.sleep(0.5)
-            with contextlib.suppress(TimeoutError):
-                data = await asyncio.wait_for(adapter_reader.read(2048), timeout=2)
-                _LOGGER.debug(
-                    "XT-PICO interface menu: %s",
-                    data.decode("latin-1", errors="replace"),
-                )
-            adapter_writer.write(b"1\r\n")  # SERIAL1 Menu
-            await adapter_writer.drain()
-            await asyncio.sleep(0.5)
-            with contextlib.suppress(TimeoutError):
-                data = await asyncio.wait_for(adapter_reader.read(2048), timeout=2)
-                _LOGGER.debug(
-                    "XT-PICO serial1 menu: %s",
-                    data.decode("latin-1", errors="replace"),
-                )
-            adapter_writer.write(b"1\r\n")  # SERIAL Config Menu
-            await adapter_writer.drain()
-            await asyncio.sleep(0.5)
-            with contextlib.suppress(TimeoutError):
-                data = await asyncio.wait_for(adapter_reader.read(2048), timeout=2)
-                _LOGGER.debug(
-                    "XT-PICO serial config: %s",
-                    data.decode("latin-1", errors="replace"),
-                )
-            adapter_writer.write(b"8=2\r\n")  # DTR Protocol = 2 (Always HIGH)
-            await adapter_writer.drain()
-            await asyncio.sleep(0.5)
-            with contextlib.suppress(TimeoutError):
-                data = await asyncio.wait_for(adapter_reader.read(512), timeout=2)
-                _LOGGER.debug(
-                    "XT-PICO after DTR=2: %s",
-                    data.decode("latin-1", errors="replace"),
-                )
-            adapter_writer.write(b"Q\r\n")  # Back to SERIAL1 menu
-            await adapter_writer.drain()
-            await asyncio.sleep(0.3)
-            adapter_writer.write(b"Q\r\n")  # Back to Interface menu
-            await adapter_writer.drain()
-            await asyncio.sleep(0.3)
-            adapter_writer.write(b"Q\r\n")  # Back to main menu
-            await adapter_writer.drain()
-            await asyncio.sleep(0.3)
-
-            # R = Restart Interface (saves config and restarts)
-            adapter_writer.write(b"R\r\n")
-            await adapter_writer.drain()
-            await asyncio.sleep(0.5)
-
-            _LOGGER.warning(
-                "Binary mode recovery: DTR Protocol=2 set + adapter restart sent. "
-                "Disconnecting and waiting %ds for reboot...",
-                15,
+                "Binary mode recovery: XTVCom rhi sent. "
+                "Disconnecting port 1002 and waiting 5s for controller to recover..."
             )
         except Exception:
             _LOGGER.exception(
-                "Binary mode recovery: failed to connect to adapter management port"
+                "Binary mode recovery: XTVCom port %d not reachable, "
+                "falling back to XT-PICO Telnet...",
+                _XTVCOM_PORT,
             )
         finally:
-            if adapter_writer:
-                try:
-                    adapter_writer.close()
-                    await adapter_writer.wait_closed()
-                except (OSError, RuntimeError):
-                    _LOGGER.debug("Failed to close adapter writer cleanly")
+            if xtvcom_writer:
+                with contextlib.suppress(OSError, RuntimeError):
+                    xtvcom_writer.close()
+                    await xtvcom_writer.wait_closed()
 
-        # Disconnect from the controller (binary mode stream) and wait for reboot
-        await self.disconnect()
-        await asyncio.sleep(15)  # give controller enough time to fully boot
+        if xtvcom_ok:
+            # XTVCom init sent — disconnect and give the controller a moment
+            await self.disconnect()
+            await asyncio.sleep(5)
+        else:
+            # ── Strategy 2: Telnet management port 23 ────────────────────────
+            adapter_reader = None
+            adapter_writer = None
+            try:
+                if not self._adapter_password:
+                    _LOGGER.warning(
+                        "Binary mode recovery: no adapter_password configured, "
+                        "cannot use Telnet fallback. "
+                        "Configure XTVCom (port %d) on your XT-PICO, or set an "
+                        "adapter password in the integration options.",
+                        _XTVCOM_PORT,
+                    )
+                else:
+                    _LOGGER.warning(
+                        "Binary mode recovery: connecting to XT-PICO Telnet"
+                        " at %s:23...",
+                        self.host,
+                    )
+                    adapter_reader, adapter_writer = await asyncio.wait_for(
+                        asyncio.open_connection(self.host, 23),
+                        timeout=10,
+                    )
+
+                    await asyncio.sleep(0.5)
+                    with contextlib.suppress(TimeoutError):
+                        data = await asyncio.wait_for(
+                            adapter_reader.read(1024), timeout=2
+                        )
+                        _LOGGER.debug(
+                            "XT-PICO banner: %s",
+                            data.decode("latin-1", errors="replace"),
+                        )
+
+                    adapter_writer.write(f"{self._adapter_password}\r\n".encode())
+                    await adapter_writer.drain()
+
+                    await asyncio.sleep(1.0)
+                    with contextlib.suppress(TimeoutError):
+                        data = await asyncio.wait_for(
+                            adapter_reader.read(2048), timeout=2
+                        )
+                        _LOGGER.debug(
+                            "XT-PICO main menu: %s",
+                            data.decode("latin-1", errors="replace"),
+                        )
+
+                    # Navigate to SERIAL1 Config to ensure DTR Protocol=2 (Always HIGH).
+                    # XT-PICO menu path: I -> 1 -> 1 -> set 8=2 -> Q -> Q -> Q
+                    _LOGGER.warning(
+                        "Binary mode recovery: ensuring DTR Protocol=2 (Always HIGH)..."
+                    )
+                    adapter_writer.write(b"I\r\n")
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.5)
+                    with contextlib.suppress(TimeoutError):
+                        data = await asyncio.wait_for(
+                            adapter_reader.read(2048), timeout=2
+                        )
+                        _LOGGER.debug(
+                            "XT-PICO interface menu: %s",
+                            data.decode("latin-1", errors="replace"),
+                        )
+                    adapter_writer.write(b"1\r\n")
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.5)
+                    with contextlib.suppress(TimeoutError):
+                        data = await asyncio.wait_for(
+                            adapter_reader.read(2048), timeout=2
+                        )
+                        _LOGGER.debug(
+                            "XT-PICO serial1 menu: %s",
+                            data.decode("latin-1", errors="replace"),
+                        )
+                    adapter_writer.write(b"1\r\n")
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.5)
+                    with contextlib.suppress(TimeoutError):
+                        data = await asyncio.wait_for(
+                            adapter_reader.read(2048), timeout=2
+                        )
+                        _LOGGER.debug(
+                            "XT-PICO serial config: %s",
+                            data.decode("latin-1", errors="replace"),
+                        )
+                    adapter_writer.write(b"8=2\r\n")  # DTR Protocol = 2 (Always HIGH)
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.5)
+                    with contextlib.suppress(TimeoutError):
+                        data = await asyncio.wait_for(
+                            adapter_reader.read(512), timeout=2
+                        )
+                        _LOGGER.debug(
+                            "XT-PICO after DTR=2: %s",
+                            data.decode("latin-1", errors="replace"),
+                        )
+                    adapter_writer.write(b"Q\r\n")
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.3)
+                    adapter_writer.write(b"Q\r\n")
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.3)
+                    adapter_writer.write(b"Q\r\n")
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.3)
+                    adapter_writer.write(b"R\r\n")  # Restart Interface
+                    await adapter_writer.drain()
+                    await asyncio.sleep(0.5)
+                    _LOGGER.warning(
+                        "Binary mode recovery: DTR Protocol=2 set"
+                        " + adapter restart sent. "
+                        "Disconnecting and waiting 15s for reboot..."
+                    )
+            except Exception:
+                _LOGGER.exception(
+                    "Binary mode recovery: Telnet connection to port 23 failed"
+                )
+            finally:
+                if adapter_writer:
+                    with contextlib.suppress(OSError, RuntimeError):
+                        adapter_writer.close()
+                        await adapter_writer.wait_closed()
+
+            await self.disconnect()
+            await asyncio.sleep(15)
 
         _LOGGER.warning(
-            "Binary mode recovery: attempting reconnect to %s:%s after adapter restart",
+            "Binary mode recovery: attempting reconnect to %s:%s",
             self.host,
             self.port,
         )
@@ -1154,7 +1227,7 @@ class HeytechApiClient:
                             pass
 
                     # Strategy 2: after 30 s of rhi attempts, fall back to
-                    # XT-PICO Telnet restart (requires adapter_password).
+                    # XTVCom port 11011 recovery (then Telnet if unavailable).
                     if not _binary_mode_warned:
                         _LOGGER.error(
                             "Heytech controller is in binary boot mode "
@@ -1168,7 +1241,6 @@ class HeytechApiClient:
                     if (
                         _rhi_attempt_count >= 10
                         and not _adapter_restart_scheduled
-                        and self._adapter_password
                         and not self._recovery_in_progress
                         and not self._recovery_gave_up
                         and (_time.monotonic() - self._last_recovery_time) >= 60
@@ -1176,8 +1248,9 @@ class HeytechApiClient:
                         _adapter_restart_scheduled = True
                         _LOGGER.warning(
                             "Binary mode: rhi wakeup did not help after %d attempts, "
-                            "falling back to XT-PICO Telnet restart...",
+                            "trying XTVCom recovery (port %d)...",
                             _rhi_attempt_count,
+                            _XTVCOM_PORT,
                         )
                         asyncio.get_event_loop().call_later(
                             1,
