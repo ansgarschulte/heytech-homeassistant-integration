@@ -1,17 +1,32 @@
 # Heytech Home Assistant Integration
 
 [![GitHub Release][releases-shield]][releases]
-[![Version](https://img.shields.io/badge/version-1.5.1-blue.svg)](https://github.com/ansgarschulte/heytech-homeassistant-integration/releases)
+[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)](https://github.com/ansgarschulte/heytech-homeassistant-integration/releases)
 [![License][license-shield]](LICENSE)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 
-**🎉 Version 1.5.1** - Bug fixes for logbook reading and time synchronization!
+**🎉 Version 1.6.0** - Automatic binary mode recovery after power outages!
 
 Control your Heytech shutter system directly from Home Assistant.
 
 [releases-shield]: https://img.shields.io/github/release/ansgarschulte/heytech-homeassistant-integration.svg
 [releases]: https://github.com/ansgarschulte/heytech-homeassistant-integration/releases
 [license-shield]: https://img.shields.io/github/license/ansgarschulte/heytech-homeassistant-integration.svg
+
+---
+
+## Changelog
+
+### 1.6.0
+- 🔄 **Automatic binary mode recovery** after power outages via XTVCom protocol (port 11011) — no configuration required
+- 🗑️ Removed manual reconnect button and service (no longer needed)
+- 🗑️ Removed XT-PICO adapter password configuration (Telnet fallback removed)
+
+### 1.5.9
+- 🐛 Fix: disconnect port 1002 before XTVCom recovery attempt to avoid port conflict on XT-PICO
+
+### 1.5.1
+- 🐛 Bug fixes for logbook reading and time synchronization
 
 ---
 
