@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """
 Heytech Scene Integration for Home Assistant.
 

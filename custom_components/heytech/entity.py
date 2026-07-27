@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """HeytechEntity class."""
 
 from __future__ import annotations

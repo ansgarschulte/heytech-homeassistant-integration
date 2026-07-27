@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """Custom types for heytech."""
 
 from __future__ import annotations

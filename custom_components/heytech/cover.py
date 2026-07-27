@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """
 Heytech Cover Integration for Home Assistant.
 
@@ -118,7 +119,7 @@ async def async_setup_entry(
                     group_channels,
                     api_client,
                     unique_id,
-                    coordinator,
+                    coordinator=coordinator,
                 )
             )
 
@@ -438,6 +439,7 @@ class HeytechGroupCover(HeytechCover):
         channels: list[int],
         api_client: HeytechApiClient,
         unique_id: str,
+        *,
         coordinator: HeytechDataUpdateCoordinator,
     ) -> None:
         """Initialize the group cover."""
