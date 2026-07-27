@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 # coordinator.py
 """Data coordinator for the Heytech integration."""
 

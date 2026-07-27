@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """Button platform for Heytech integration."""
 
 from __future__ import annotations

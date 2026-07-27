@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """
 Config flow for the Heytech integration.
 

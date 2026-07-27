@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """Constants for heytech."""
 
 from logging import Logger, getLogger

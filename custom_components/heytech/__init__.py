@@ -1,3 +1,4 @@
+# Copyright (C) 2024 Ansgar Schulte
 """
 Custom integration to integrate Heytech with Home Assistant.
 
