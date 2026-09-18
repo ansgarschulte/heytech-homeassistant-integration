@@ -792,21 +792,34 @@ class HeytechApiClient:
         raise IntegrationHeytechApiClientCommunicationError(message)
 
     async def _periodic_commands(self) -> None:
-        """Send 'sop' command every x sec and 'skd' command every y (y>x) minutes."""
-        last_skd = asyncio.get_event_loop().time()
+        """Poll positions and climate data without stopping on connection errors."""
+        loop = asyncio.get_running_loop()
+        last_sop = loop.time()
+        last_skd = last_sop
         while True:
-            now = asyncio.get_event_loop().time()
-            # Send 'sop' every SOP_INTERVAL seconds
-            await asyncio.sleep(SOP_INTERVAL)
-            if not self.connected:
-                await self.connect()
-            await self._add_periodic_command("sop", [])
+            try:
+                await asyncio.sleep(RECONNECT_RETRY_INTERVAL)
+                now = loop.time()
 
-            # Check if it's time to send 'skd' and 'sau'
-            if now - last_skd >= SKD_INTERVAL and self.connected:
-                await self._add_periodic_command("skd", [])
-                await self._add_periodic_command("sau", [])
-                last_skd = asyncio.get_event_loop().time()
+                if not self.connected:
+                    await self.connect()
+                    await self._add_periodic_command("sop", [])
+                    last_sop = now
+                elif now - last_sop >= SOP_INTERVAL:
+                    await self._add_periodic_command("sop", [])
+                    last_sop = now
+
+                if now - last_skd >= SKD_INTERVAL and self.connected:
+                    await self._add_periodic_command("skd", [])
+                    await self._add_periodic_command("sau", [])
+                    last_skd = now
+            except asyncio.CancelledError:
+                raise
+            except IntegrationHeytechApiClientCommunicationError:
+                _LOGGER.warning(
+                    "Periodic Heytech poll failed; controller may be busy. "
+                    "Retrying automatically."
+                )
 
     async def _process_commands(self) -> None:
         """
