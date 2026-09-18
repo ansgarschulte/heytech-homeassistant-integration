@@ -1,11 +1,11 @@
 # Heytech Home Assistant Integration
 
 [![GitHub Release][releases-shield]][releases]
-[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)](https://github.com/ansgarschulte/heytech-homeassistant-integration/releases)
+[![Version](https://img.shields.io/badge/version-1.6.1-blue.svg)](https://github.com/ansgarschulte/heytech-homeassistant-integration/releases)
 [![License][license-shield]](LICENSE)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 
-**🎉 Version 1.6.0** - Automatic binary mode recovery after power outages!
+**🧪 Version 1.6.1 Beta** - Automatic recovery after temporary connection failures!
 
 Control your Heytech shutter system directly from Home Assistant.
 

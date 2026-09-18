@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.6.1] - 2026-09-18
 
 ### 🐛 Fixed
 - **Periodic Polling Recovery** - Temporary connection refusals no longer stop
   the background polling task. The integration retries automatically and
   requests current shutter positions immediately after reconnecting (#138).
+
+## [Unreleased]
 
 ## [1.5.1] - 2025-12-29
 
