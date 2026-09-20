@@ -5,7 +5,7 @@
 [![License][license-shield]](LICENSE)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/)
 
-**🧪 Version 1.6.1 Beta** - Automatic recovery after temporary connection failures!
+**🎉 Version 1.6.1** - Automatic recovery after temporary connection failures!
 
 Control your Heytech shutter system directly from Home Assistant.
 

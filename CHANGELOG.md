@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.6.1] - 2026-09-18
+## [1.6.1] - 2026-09-20
 
 ### 🐛 Fixed
 - **Periodic Polling Recovery** - Temporary connection refusals no longer stop
